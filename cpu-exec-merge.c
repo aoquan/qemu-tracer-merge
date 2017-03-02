@@ -46,6 +46,7 @@
 #define RECORD_SPECIFIC_FUNC 0
 #define RECORD_SPECIFIC_PROGRAM 0
 int record_what
+int record_kernel_or_userspace
 //end merge
 
 
@@ -559,8 +560,7 @@ static int funcistraced(my_target_ulong target)
     return -1;
 }
 
-
-static void record_all_call_ret(CPUState *cpu,CPUArchState *env ,target_ulong task,processname){
+static void record_call_ret(CPUState *cpu,CPUArchState *env ,target_ulong task,processname){
     TranslationBlock *tb = cpu->current_tb;
     logData ld;
     ld.processname = processname;
@@ -573,54 +573,15 @@ static void record_all_call_ret(CPUState *cpu,CPUArchState *env ,target_ulong ta
     if(cpu->current_tb==TB_CALL){
         ld.type='C';
         ld.curAddr = tb->pc+tb->size-2;
-        my_qemu_log("C,%s,"TARGET_FMT_lx","TARGET_FMT_lx","TARGET_FMT_lx",%d,"TARGET_FMT_lx"\n",ld.processName,ld.curAddr,ld.goAddr,ld.pid,ld.tid,ld.esp);
+        
     }else{
         ld.type='R';
         ld.curAddr = tb->pc+tb->size-1;
-        my_qemu_log("R,%s,"TARGET_FMT_lx","TARGET_FMT_lx","TARGET_FMT_lx",%d,"TARGET_FMT_lx"\n",ld.processName,ld.curAddr,ld.goAddr,ld.pid,ld.tid,ld.esp);
+        
     }
-}
-
-static void record_user_call_ret(CPUState *cpu,CPUArchState *env ,target_ulong task,processname){
-    if(regs[R_ESP]>kernelMinAddr) return;
-    TranslationBlock *tb = cpu->current_tb;
-    logData ld;
-    ld.processname = processname;
-    ld.goAddr = env->eip;
-    ld.pid = env->cr[3];
-    uint32_t tid;
-    cpu_memory_rw_debug(cpu,task+pidOffset,(uint8_t *)&tid,sizeof(tid),0);
-    ld.tid = tid;
-    ld.esp = env->regs[R-ESP];
-    if(cpu->current_tb==TB_CALL){
-        ld.type='C';
-        ld.curAddr = tb->pc+tb->size-2;
+    if((record_kernel_or_userspace == RECORD_KERNEL_CALL_RET && ld.esp > kernelMinAddr )||(record_kernel_or_userspace == RECORD_USER_CALL_RET && ld.esp <= kernelMinAddr ) ||record_kernel_or_userspace ==RECORD_ALL_CALL_RET){
+        if(record_kernel_or_userspace == RECORD_USER_CALL_RET && )
         my_qemu_log("C,%s,"TARGET_FMT_lx","TARGET_FMT_lx","TARGET_FMT_lx",%d,"TARGET_FMT_lx"\n",ld.processName,ld.curAddr,ld.goAddr,ld.pid,ld.tid,ld.esp);
-    }else{
-        ld.type='R';
-        ld.curAddr = tb->pc+tb->size-1;
-        my_qemu_log("R,%s,"TARGET_FMT_lx","TARGET_FMT_lx","TARGET_FMT_lx",%d,"TARGET_FMT_lx"\n",ld.processName,ld.curAddr,ld.goAddr,ld.pid,ld.tid,ld.esp);
-    }
-}
-
-static void record_kernel_call_ret(CPUState *cpu,CPUArchState *env ,target_ulong task,processname){
-    if(regs[R_ESP]<kernelMinAddr) return;
-    TranslationBlock *tb = cpu->current_tb;
-    logData ld;
-    ld.processname = processname;
-    ld.goAddr = env->eip;
-    ld.pid = env->cr[3];
-    uint32_t tid;
-    cpu_memory_rw_debug(cpu,task+pidOffset,(uint8_t *)&tid,sizeof(tid),0);
-    ld.tid = tid;
-    ld.esp = env->regs[R-ESP];
-    if(cpu->current_tb==TB_CALL){
-        ld.type='C';
-        ld.curAddr = tb->pc+tb->size-2;
-        my_qemu_log("C,%s,"TARGET_FMT_lx","TARGET_FMT_lx","TARGET_FMT_lx",%d,"TARGET_FMT_lx"\n",ld.processName,ld.curAddr,ld.goAddr,ld.pid,ld.tid,ld.esp);
-    }else{
-        ld.type='R';
-        ld.curAddr = tb->pc+tb->size-1;
         my_qemu_log("R,%s,"TARGET_FMT_lx","TARGET_FMT_lx","TARGET_FMT_lx",%d,"TARGET_FMT_lx"\n",ld.processName,ld.curAddr,ld.goAddr,ld.pid,ld.tid,ld.esp);
     }
 }
