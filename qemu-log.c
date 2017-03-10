@@ -19,7 +19,7 @@
 
 #include "qemu-common.h"
 #include "qemu/log.h"
-#include "header/MachineBit.h"
+#include "comm_struct/MachineBit.h"
 static char *logfilename;
 FILE *qemu_logfile;
 int qemu_loglevel;

@@ -28,14 +28,6 @@
 #include <errno.h>
 #include <sys/time.h>
 
-////////////////////
-//typedef unsigned long long uint64_t;
-//#include"header/Stack.h"
-#include"include/comm_struct/List.h"
-#include<string.h>
-
-////////////////////
-
 #include "config-host.h"
 
 #ifdef CONFIG_SECCOMP
@@ -49,8 +41,6 @@
 #ifdef CONFIG_SDL
 #if defined(__APPLE__) || defined(main)
 #include <SDL.h>
-
-
 int qemu_main(int argc, char **argv, char **envp);
 int main(int argc, char **argv)
 {
@@ -133,7 +123,7 @@ int main(int argc, char **argv)
 #include "exec/semihost.h"
 #include "crypto/init.h"
 
-//#include "header/MachineBit.h"
+#include "header/MachineBit.h"
 
 typedef uint64_t target_ulong;
 #define TARGET_lx "%" PRIx64
@@ -2961,87 +2951,6 @@ static void set_memory_options(uint64_t *ram_slots, ram_addr_t *maxram_size,
     }
 }
 
-/*
-param1: program which need to be traced,eg:sshd,kernel 
-param2: address range of tracing, it can be 00~ff,1f,5d..., it's union set 
-param3: record parameter, it should be string,int,socket
-param4: record link map, it should be linkMap if link map is needed, else no
-param5: record function stack, it should be funcStack else no
- */
-struct address_range{
-    my_target_ulong begin;
-    my_target_ulong end;
-}addr_range;
-
-List program_list;
-my_target_ulong addr_begin = 0;
-my_target_ulong addr_end =0xffffffffffffffff;
-
-
-static int print_str_list(char * a,void *e){
-    printf("%s     ",a);
-    return 0;
-}
-
-static int read_configs(void){
-//    char program_name;
-    FILE *fp = fopen("configs.txt","r");
-    char line[200]={0};
-    char * item;
-    int i;
-    initList(&program_list,sizeof(char *));
-    if(fgets(line,sizeof(line)/sizeof(char),fp)==NULL){
-        printf("read program name error!");
-        exit(0);
-    }
-    item=strtok(line,(char*)",");
-    while(item!=NULL){
-        printf("%s\n",item);
-        appendList(&program_list,item);
-        item = strtok(NULL,(char*)",");
-    }
-    traverseList(&program_list,(TRAVERSEFUNC)print_str_list,0);
-    
-    //read address range
-    if(fgets(line,sizeof(line)/sizeof(char),fp)==NULL){
-        printf("read address range error!");
-        exit(0);
-    }
-
-    item=strtok(line,(char*)",");
-    printf("%s\n",item);
-    int len = strlen(item);
-    char *tmp = (char*)malloc(len+1);
-    memcpy(tmp,item,len);
-    tmp[len]=0;
-
-//    tmp=strtok(tmp,(char*)",");
-    if(strstr(item,"~")!=NULL){
-        tmp = strtok(tmp,(char*)"~");
-        addr_begin = atol(tmp);
-        tmp = strtok(NULL,(char*)"~");
-        addr_end = atol(tmp);
-    }
-    
-
-    item = strtok(NULL,(char*)",");
-    funccount=0;
-    while(item!=NULL){
-        printf("%s\n",item);
-        funcaddr[funccount++] = atol(item);
-        item = strtok(NULL,(char*)",");
-    }
-    printf(MY_TARGET_lx","MY_TARGET_lx"\n",addr_begin,addr_end);
-    for(i=0;i<funccount;i++){
-        printf(MY_TARGET_lx"\n",funcaddr[i]);
-    }
-    
-
-    exit(0);
-    return 0;
-}
-
-
 int main(int argc, char **argv, char **envp)
 {
     int i;
@@ -4200,31 +4109,15 @@ int main(int argc, char **argv, char **envp)
         qemu_set_log(mask);
         
         if (qemu_loglevel_mask(CPU_LOG_FUNC)) {    
-//            FILE *fp = fopen("configs.txt", "r");
-            /*
+            FILE *fp = fopen("configs.txt", "r");
             if(fscanf(fp,MY_TARGET_lx MY_TARGET_lx" %s" MY_TARGET_lx,&kernel_start,&kernel_end,target,&got)){
                 while(fscanf(fp,MY_TARGET_lx" %d %d",&funcaddr[funccount],&funcParaPos[funccount],&funcParaType[funccount])!=-1){
                     printf(MY_TARGET_lx" %d %d\n",funcaddr[funccount],funcParaPos[funccount],funcParaType[funccount]);
                     funccount++;
                 }
             }
-            */
-            /*
-            param1: program which need to be traced,eg:sshd,kernel 
-            param2: address range of tracing, it can be 00~ff,1f,5d..., it's union set 
-            param3: record parameter, it should be string,int,socket
-            param4: record link map, it should be linkMap if link map is needed, else no
-            param5: record function stack, it should be funcStack else no
-             */
-
-            read_configs();
-            exit(0);
-            return 0;
-
-
-
-//            target[15]=0;
-//            fclose(fp);
+            target[15]=0;
+            fclose(fp);
 		}
     }
 

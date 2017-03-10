@@ -60,7 +60,10 @@ common-obj-y += audio/
 common-obj-y += hw/
 common-obj-y += accel.o
 
-common-obj-y += ui/
+common-obj-y += ui/ 
+###aquan
+common-obj-y += comm_struct/
+###aquan
 common-obj-y += bt-host.o bt-vhci.o
 bt-host.o-cflags := $(BLUEZ_CFLAGS)
 
@@ -92,7 +95,8 @@ common-obj-y += qemu-log.o
 common-obj-y += tcg-runtime.o
 common-obj-y += hw/
 common-obj-y += qom/
-common-obj-y += disas/
+common-obj-y += disas/ 
+
 
 ######################################################################
 # Resource file for Windows executables
@@ -110,4 +114,5 @@ target-obj-y += trace/
 # FIXME: a few definitions from qapi-types.o/qapi-visit.o are needed
 # by libqemuutil.a.  These should be moved to a separate .json schema.
 qga-obj-y = qga/
-qga-vss-dll-obj-y = qga/
+qga-vss-dll-obj-y = qga/ 
+

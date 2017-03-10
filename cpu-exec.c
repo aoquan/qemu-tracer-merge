@@ -30,9 +30,10 @@
 #include "exec/tb-hash.h"
 
 
-#include "header/Stack.h"
-#include "header/List.h"
-#include "header/MachineBit.h"
+//#include "header/Stack.h"
+//#include "header/List.h"
+//#include "header/MachineBit.h"
+#include "include/comm_struct/List.h"
 
 #define PARASOCKET 0 
 #define PARASTRING 1 
@@ -45,7 +46,7 @@
 #define RECORD_FUNC_PARAMETERS 0
 #define RECORD_SPECIFIC_FUNC 0
 #define RECORD_SPECIFIC_PROGRAM 0
-int record_what
+int record_what;
 //end merge
 
 
@@ -465,7 +466,7 @@ struct pt_dynamic{
     my_target_ulong d_un;
 };
 
-
+/*
 //get start address of link map using .got.plt section address
 static my_target_ulong getLinkMapStartAddrByGot(CPUState *cpu, my_target_ulong got){
     my_target_ulong plinkmap;
@@ -491,7 +492,8 @@ static my_target_ulong getLinkMapStartAddrByDynamic(FILE * fp,CPUState *cpu, my_
     }
     return 0;
 }
-
+*/
+/*
 // tarverse the link map and print the load address and names of SO 
 static void traverseLinkMap(FILE *fp ,CPUState *cpu,my_target_ulong plinkmap){
     struct link_map lnk_tmp;
@@ -513,6 +515,7 @@ static void traverseLinkMap(FILE *fp ,CPUState *cpu,my_target_ulong plinkmap){
     }           
     fprintf(fp,"linkmap end\n");
 }
+*/
 
 /*
 static void printLinkMap(FILE * fp,CPUState *cpu,my_target_ulong got){
@@ -559,18 +562,18 @@ static int funcistraced(my_target_ulong target)
     return -1;
 }
 
-
-static void record_all_call_ret(CPUState *cpu,CPUArchState *env ,target_ulong task,processname){
+/*
+static void record_all_call_ret(CPUState *cpu,CPUArchState *env ,target_ulong task,char *processname){
     TranslationBlock *tb = cpu->current_tb;
     logData ld;
-    ld.processname = processname;
+    ld.processName = processname;
     ld.goAddr = env->eip;
     ld.pid = env->cr[3];
     uint32_t tid;
     cpu_memory_rw_debug(cpu,task+pidOffset,(uint8_t *)&tid,sizeof(tid),0);
     ld.tid = tid;
-    ld.esp = env->regs[R-ESP];
-    if(cpu->current_tb==TB_CALL){
+    ld.esp = env->regs[R_ESP];
+    if(cpu->current_tb->type==TB_CALL){
         ld.type='C';
         ld.curAddr = tb->pc+tb->size-2;
         my_qemu_log("C,%s,"TARGET_FMT_lx","TARGET_FMT_lx","TARGET_FMT_lx",%d,"TARGET_FMT_lx"\n",ld.processName,ld.curAddr,ld.goAddr,ld.pid,ld.tid,ld.esp);
@@ -581,18 +584,18 @@ static void record_all_call_ret(CPUState *cpu,CPUArchState *env ,target_ulong ta
     }
 }
 
-static void record_user_call_ret(CPUState *cpu,CPUArchState *env ,target_ulong task,processname){
+static void record_user_call_ret(CPUState *cpu,CPUArchState *env ,target_ulong task,char * processname){
     if(regs[R_ESP]>kernelMinAddr) return;
     TranslationBlock *tb = cpu->current_tb;
     logData ld;
-    ld.processname = processname;
+    ld.procesNname = processname;
     ld.goAddr = env->eip;
     ld.pid = env->cr[3];
     uint32_t tid;
     cpu_memory_rw_debug(cpu,task+pidOffset,(uint8_t *)&tid,sizeof(tid),0);
     ld.tid = tid;
     ld.esp = env->regs[R-ESP];
-    if(cpu->current_tb==TB_CALL){
+    if(cpu->current_tb->type==TB_CALL){
         ld.type='C';
         ld.curAddr = tb->pc+tb->size-2;
         my_qemu_log("C,%s,"TARGET_FMT_lx","TARGET_FMT_lx","TARGET_FMT_lx",%d,"TARGET_FMT_lx"\n",ld.processName,ld.curAddr,ld.goAddr,ld.pid,ld.tid,ld.esp);
@@ -603,18 +606,18 @@ static void record_user_call_ret(CPUState *cpu,CPUArchState *env ,target_ulong t
     }
 }
 
-static void record_kernel_call_ret(CPUState *cpu,CPUArchState *env ,target_ulong task,processname){
+static void record_kernel_call_ret(CPUState *cpu,CPUArchState *env ,target_ulong task,char *processname){
     if(regs[R_ESP]<kernelMinAddr) return;
     TranslationBlock *tb = cpu->current_tb;
     logData ld;
-    ld.processname = processname;
+    ld.processName = processname;
     ld.goAddr = env->eip;
     ld.pid = env->cr[3];
     uint32_t tid;
     cpu_memory_rw_debug(cpu,task+pidOffset,(uint8_t *)&tid,sizeof(tid),0);
     ld.tid = tid;
     ld.esp = env->regs[R-ESP];
-    if(cpu->current_tb==TB_CALL){
+    if(cpu->current_tb->type==TB_CALL){
         ld.type='C';
         ld.curAddr = tb->pc+tb->size-2;
         my_qemu_log("C,%s,"TARGET_FMT_lx","TARGET_FMT_lx","TARGET_FMT_lx",%d,"TARGET_FMT_lx"\n",ld.processName,ld.curAddr,ld.goAddr,ld.pid,ld.tid,ld.esp);
@@ -629,6 +632,7 @@ static void record_kernel_call_ret(CPUState *cpu,CPUArchState *env ,target_ulong
 static void record_spcific_func(){
     ;
 }
+
 
 static void record_specific_program(CPUState *cpu,CPUArchState *env ,target_ulong task,char [] processname){
     my_target_ulong ppid = getParentPid(cpu,task+realParentOffset);
@@ -647,32 +651,27 @@ static void record_specific_program(CPUState *cpu,CPUArchState *env ,target_ulon
             int pid = (int)getPid(cpu,task+pidOffset);
             appendList(&tracePidList,&pid); // the first pid ,parent of all other process 
             curThread = malloc(sizeof(threadList));
-            /*
+            
+            ///
             stackWrite = fopen("stack","w");
             if(NULL == stackWrite){
                 exit(0);
             }
             fprintf(stackWrite,"P,%d,%d,%d\n",(int)ppid,(int)pid,(int)tgid);
-            */
+            ///
         }    
         if(countCpuExec == 1 && inListFlag != -1){ 
             int pid = (int)getPid(cpu,task+pidOffset);
             if(IndexOf(&tracePidList,pid)==-1){
-                /*
-                fprintf(stackWrite,"P,%d,%d,%d,%s\n",(int)ppid,(int)pid,(int)tgid,processname);
-                */
+                
+                //fprintf(stackWrite,"P,%d,%d,%d,%s\n",(int)ppid,(int)pid,(int)tgid,processname);
                 appendList(&tracePidList,&pid);
             }
         }
         countCpuExec=1;
 
-        
-
-
-
-
 }
-
+*/
 
 
 /* main execution loop */
@@ -882,6 +881,7 @@ int cpu_exec(CPUState *cpu)
                                     inListFlag = 0; //it can be assigned to any num but -1
                                 }
                             }
+                            /*
                             if(RECORD_ALL_CALL_RET==1){
                                 record_all_call_ret(cpu,task);
                             }
@@ -891,6 +891,7 @@ int cpu_exec(CPUState *cpu)
                             if(RECORD_USER_CALL_RET==1){
                                 record_user_call_ret();
                             }
+                            */
 
 
                             if(strcmp(processname,target)==0 || inListFlag !=-1){
