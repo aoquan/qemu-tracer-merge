@@ -276,3 +276,32 @@ int IndexOf(const List *head,int element){
     }
     return(-1);
 }
+
+int IndexOfStr(const List *head,char * element){
+    if(head==NULL)
+        return(-1);
+
+    struct __ListElement *cur=head->next;
+    int count = 0;
+    while(cur!=NULL)
+    {
+        //if((*(my_target_ulong*)cur->data)==element){
+        if(strcmp((char *)cur->data,element)==0){
+            return count;
+        }
+        cur=cur->next;
+        count ++;
+    }
+    return(-1);
+}
+
+int lengthOfList(const List * head){
+    if(head==NULL) return 0;
+    struct __ListElement *cur=head->next;
+    int count = 0;
+    while(cur!=NULL){
+        cur =cur->next;
+        count++;
+    }
+    return count;
+}

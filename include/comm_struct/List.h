@@ -24,6 +24,7 @@ typedef struct logData{
     uint64_t curAddr;
     uint64_t goAddr;
     uint64_t pid;
+    uint64_t ppid;
     int tid;
     uint64_t esp;
 }logData;
@@ -132,7 +133,10 @@ int GetCurThread(const List *head,uint64_t pid,uint64_t tid ,void *e);
 //index of element
 int IndexOf(const List *head,int element);
 
+//index of element
+int IndexOfStr(const List *head,char * element);
 
+int lengthOfList(const List *head);
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
 

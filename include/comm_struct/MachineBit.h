@@ -8,12 +8,14 @@
 #if osBit32 
 typedef uint32_t my_target_ulong;
 #define kernelMinAddr 0xc0000000           //if an address less than kernelMinAddr, it is in user space, otherwise in kernel space 
+#define kernelMaxAddr 0xffffffff
 #define gotMinAddr 0x80000000              //if the share object start address in 32 bit os
 #define MY_TARGET_FMT_lx "%08x" 
 #define MY_TARGET_lx "%x"
 #else
 typedef uint64_t my_target_ulong;
 #define kernelMinAddr 0xf000000000000000
+#define kernelMaxAddr 0xffffffffffffffff
 #define gotMinAddr 0x0000555555554000 
 #define MY_TARGET_FMT_lx "%016lx" PRIx64
 #define MY_TARGET_lx "%" PRIx64

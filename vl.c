@@ -146,6 +146,8 @@ int funcParaPos[FUNC_MAX],funcParaType[FUNC_MAX];
 int funccount=0;
 char funcargv[FUNC_MAX][PRAM_MAX],target[16];
 my_target_ulong got;
+bool print_link_map;
+bool print_funcstack;
 
 #define MAX_VIRTIO_CONSOLES 1
 #define MAX_SCLP_CONSOLES 1
@@ -2968,14 +2970,11 @@ param3: record parameter, it should be string,int,socket
 param4: record link map, it should be linkMap if link map is needed, else no
 param5: record function stack, it should be funcStack else no
  */
-struct address_range{
-    my_target_ulong begin;
-    my_target_ulong end;
-}addr_range;
-
 List program_list;
-my_target_ulong addr_begin = 0;
-my_target_ulong addr_end =0xffffffffffffffff;
+my_target_ulong kernel_addr_begin ;
+my_target_ulong kernel_addr_end;
+my_target_ulong user_addr_begin ;
+my_target_ulong user_addr_end;
 
 
 static int print_str_list(char * a,void *e){
@@ -2984,7 +2983,7 @@ static int print_str_list(char * a,void *e){
 }
 
 static int read_configs(void){
-//    char program_name;
+//  read program_name;
     FILE *fp = fopen("configs.txt","r");
     char line[200]={0};
     char * item;
@@ -2994,50 +2993,100 @@ static int read_configs(void){
         printf("read program name error!");
         exit(0);
     }
+
+    line[strlen(line)-1]=0; // delete end '\n'
     item=strtok(line,(char*)",");
     while(item!=NULL){
-        printf("%s\n",item);
         appendList(&program_list,item);
         item = strtok(NULL,(char*)",");
     }
     traverseList(&program_list,(TRAVERSEFUNC)print_str_list,0);
+    printf("\n");
     
-    //read address range
+    //read kernel address range
     if(fgets(line,sizeof(line)/sizeof(char),fp)==NULL){
         printf("read address range error!");
         exit(0);
     }
-
-    item=strtok(line,(char*)",");
-    printf("%s\n",item);
-    int len = strlen(item);
-    char *tmp = (char*)malloc(len+1);
-    memcpy(tmp,item,len);
-    tmp[len]=0;
-
-//    tmp=strtok(tmp,(char*)",");
-    if(strstr(item,"~")!=NULL){
-        tmp = strtok(tmp,(char*)"~");
-        addr_begin = atol(tmp);
-        tmp = strtok(NULL,(char*)"~");
-        addr_end = atol(tmp);
+    int line_len=strlen(line);
+    line[line_len-1]=0;
+    if(strstr(line,"~")!=NULL){
+        item=strtok(line,(char*)"~");
+        kernel_addr_begin = atol(item);
+        item=strtok(NULL,(char*)"~");
+        kernel_addr_end = atol(item);
     }
-    
+    else{
+        kernel_addr_begin = 0;
+        kernel_addr_end = kernelMaxAddr;
+    }
 
-    item = strtok(NULL,(char*)",");
+    //read user address range
+    if(fgets(line,sizeof(line)/sizeof(char),fp)==NULL){
+        printf("read address range error!");
+        exit(0);
+    }
+    line_len=strlen(line);
+    line[line_len-1]=0;
+    if(strstr(line,"~")!=NULL){
+        item=strtok(line,(char*)"~");
+        user_addr_begin = atol(item);
+        item=strtok(NULL,(char*)"~");
+        user_addr_end = atol(item);
+    }
+    else{
+        user_addr_begin = 0;
+        user_addr_end = kernelMaxAddr;
+    }
+
+    // read information about printing linkMap or not
+    if(fgets(line,sizeof(line)/sizeof(char),fp)==NULL){
+        printf("print linkMap parameter error!");
+        exit(0);
+    }
+    if(strstr(line,"linkmap:1")!=NULL){
+        print_link_map = true;
+    }
+    else{
+        print_link_map = false;
+    }
+
+
+    // read information about printing function stack or not
+    if(fgets(line,sizeof(line)/sizeof(char),fp)==NULL){
+        printf("print function stack parameter error!");
+        exit(0);
+    }
+    if(strstr(line,"funcstack:1")!=NULL){
+        print_funcstack = true;
+    }
+    else{
+        print_funcstack = false;
+    }
+
+    //read specified address and paramenter info 
+
+
     funccount=0;
-    while(item!=NULL){
-        printf("%s\n",item);
-        funcaddr[funccount++] = atol(item);
+    while(fgets(line,sizeof(line)/sizeof(char),fp)!=NULL){
+        line_len=strlen(line);
+        line[line_len-1]=0;
+        item=strtok(line,(char*)",");
+        funcaddr[funccount] = atol(item);
         item = strtok(NULL,(char*)",");
-    }
-    printf(MY_TARGET_lx","MY_TARGET_lx"\n",addr_begin,addr_end);
-    for(i=0;i<funccount;i++){
-        printf(MY_TARGET_lx"\n",funcaddr[i]);
+        funcParaPos[funccount] = atol(item);
+        item = strtok(NULL,(char*)",");
+        funcParaType[funccount] = atol(item);
+        funccount++;
     }
     
-
-    exit(0);
+    printf(MY_TARGET_lx","MY_TARGET_lx"\n",kernel_addr_begin,kernel_addr_end);
+    printf(MY_TARGET_lx","MY_TARGET_lx"\n",user_addr_begin,user_addr_end);
+    for(i=0;i<funccount;i++){
+        printf(MY_TARGET_lx" %d %d\n",funcaddr[i],funcParaPos[i],funcParaType[i]);
+    }
+    fclose(fp);
+    
     return 0;
 }
 
@@ -4200,15 +4249,6 @@ int main(int argc, char **argv, char **envp)
         qemu_set_log(mask);
         
         if (qemu_loglevel_mask(CPU_LOG_FUNC)) {    
-//            FILE *fp = fopen("configs.txt", "r");
-            /*
-            if(fscanf(fp,MY_TARGET_lx MY_TARGET_lx" %s" MY_TARGET_lx,&kernel_start,&kernel_end,target,&got)){
-                while(fscanf(fp,MY_TARGET_lx" %d %d",&funcaddr[funccount],&funcParaPos[funccount],&funcParaType[funccount])!=-1){
-                    printf(MY_TARGET_lx" %d %d\n",funcaddr[funccount],funcParaPos[funccount],funcParaType[funccount]);
-                    funccount++;
-                }
-            }
-            */
             /*
             param1: program which need to be traced,eg:sshd,kernel 
             param2: address range of tracing, it can be 00~ff,1f,5d..., it's union set 
@@ -4219,12 +4259,6 @@ int main(int argc, char **argv, char **envp)
 
             read_configs();
             exit(0);
-            return 0;
-
-
-
-//            target[15]=0;
-//            fclose(fp);
 		}
     }
 
