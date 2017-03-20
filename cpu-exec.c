@@ -538,7 +538,8 @@ static void printLinkMap(FILE * fp,CPUState *cpu,my_target_ulong got){
 */
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-extern my_target_ulong kernel_start,kernel_end,funcaddr[];
+//extern my_target_ulong kernel_start,kernel_end,funcaddr[];
+extern my_target_ulong funcaddr[];
 extern int funcParaPos[],funcParaType[];
 extern char funcargv[][6],target[];
 extern int funccount;
@@ -791,7 +792,7 @@ static void record_stack(CPUArchState *env,CPUState *cpu,const logData ld,int in
 
 }
 
-static void record_info(CPUArchState *env,CPUState *cpu){
+static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
     target_ulong tr=env->tr.base,esp0,task;
     char processname[16];
     cpu_memory_rw_debug(cpu,tr+0x4,(uint8_t *)&esp0,sizeof(esp0),0);
@@ -810,7 +811,7 @@ static void record_info(CPUArchState *env,CPUState *cpu){
         }
     }
 /////
-    TranslationBlock *tb = cpu->current_tb;
+    cpu->current_tb = tb;
     logData ld;
     ld.processName = processname;
     ld.goAddr = env->eip;
@@ -831,8 +832,8 @@ static void record_info(CPUArchState *env,CPUState *cpu){
     }
 /////
 
-    if(ld.curAddr>=kernel_addr_begin && ld.curAddr<kernel_end){
-        if(IndexOfStr(&program_list,processname)!=-1){
+    if(ld.curAddr>=kernel_addr_begin && ld.curAddr<kernel_addr_end){
+        if(IndexOfStr(&program_list,(char *)"kernel")!=-1 || IndexOfStr(&program_list,processname)!=-1){
             print_log_to_file(ld);
         }
         else{
@@ -843,7 +844,7 @@ static void record_info(CPUArchState *env,CPUState *cpu){
     }
 
     if(ld.curAddr>=user_addr_begin && ld.curAddr <user_addr_end){
-        if(IndexOfStr(&program_list,processname)!=-1){
+        if(IndexOfStr(&program_list,(char *)"user")!=-1 ||IndexOfStr(&program_list,processname)!=-1){
             print_log_to_file(ld);
         }
         else{
@@ -854,11 +855,10 @@ static void record_info(CPUArchState *env,CPUState *cpu){
     }
 
 /// need record function call 
-    if(funcistraced(env->eip)){
+    if(print_funcstack && funcistraced(env->eip)){
         //record Stack 
         record_stack(env,cpu,ld,inListFlag);
     }
-
 }
 
 /* main execution loop */
@@ -1037,7 +1037,7 @@ int cpu_exec(CPUState *cpu)
                     next_tb = cpu_tb_exec(cpu, tc_ptr);
                     if(qemu_loglevel_mask(CPU_LOG_FUNC) && (next_tb & TB_EXIT_MASK)<2){
                         if(tb->type==TB_CALL || tb->type==TB_RET){
-                            record_info(env,cpu);
+                            record_info(env,cpu,tb);
                         }
                         /*target_ulong pid=env->cr[3],esp=env->regs[R_ESP];
                           char modulename[64-sizeof(unsigned long)]="";

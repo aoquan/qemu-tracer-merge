@@ -1,1 +1,1 @@
-common-obj-y += Stack.o List.o
+common-obj-y += Stack.o List.o MachineBit.o

@@ -141,7 +141,8 @@ typedef uint64_t target_ulong;
 //~ #define TARGET_lx "%08x"
 #define FUNC_MAX 30000
 #define PRAM_MAX 6
-my_target_ulong kernel_start,kernel_end,funcaddr[FUNC_MAX];
+//my_target_ulong kernel_start,kernel_end,funcaddr[FUNC_MAX];
+my_target_ulong funcaddr[FUNC_MAX];
 int funcParaPos[FUNC_MAX],funcParaType[FUNC_MAX];
 int funccount=0;
 char funcargv[FUNC_MAX][PRAM_MAX],target[16];
@@ -3012,9 +3013,9 @@ static int read_configs(void){
     line[line_len-1]=0;
     if(strstr(line,"~")!=NULL){
         item=strtok(line,(char*)"~");
-        kernel_addr_begin = atol(item);
+        kernel_addr_begin = hex2int(item);
         item=strtok(NULL,(char*)"~");
-        kernel_addr_end = atol(item);
+        kernel_addr_end = hex2int(item);
     }
     else{
         kernel_addr_begin = 0;
@@ -3030,9 +3031,9 @@ static int read_configs(void){
     line[line_len-1]=0;
     if(strstr(line,"~")!=NULL){
         item=strtok(line,(char*)"~");
-        user_addr_begin = atol(item);
+        user_addr_begin = hex2int(item);
         item=strtok(NULL,(char*)"~");
-        user_addr_end = atol(item);
+        user_addr_end = hex2int(item);
     }
     else{
         user_addr_begin = 0;
@@ -3051,7 +3052,6 @@ static int read_configs(void){
         print_link_map = false;
     }
 
-
     // read information about printing function stack or not
     if(fgets(line,sizeof(line)/sizeof(char),fp)==NULL){
         printf("print function stack parameter error!");
@@ -3065,18 +3065,16 @@ static int read_configs(void){
     }
 
     //read specified address and paramenter info 
-
-
     funccount=0;
     while(fgets(line,sizeof(line)/sizeof(char),fp)!=NULL){
         line_len=strlen(line);
         line[line_len-1]=0;
         item=strtok(line,(char*)",");
-        funcaddr[funccount] = atol(item);
+        funcaddr[funccount] = hex2int(item);
         item = strtok(NULL,(char*)",");
-        funcParaPos[funccount] = atol(item);
+        funcParaPos[funccount] = hex2int(item);
         item = strtok(NULL,(char*)",");
-        funcParaType[funccount] = atol(item);
+        funcParaType[funccount] = hex2int(item);
         funccount++;
     }
     
@@ -3086,7 +3084,7 @@ static int read_configs(void){
         printf(MY_TARGET_lx" %d %d\n",funcaddr[i],funcParaPos[i],funcParaType[i]);
     }
     fclose(fp);
-    
+
     return 0;
 }
 
@@ -4258,7 +4256,6 @@ int main(int argc, char **argv, char **envp)
              */
 
             read_configs();
-            exit(0);
 		}
     }
 
