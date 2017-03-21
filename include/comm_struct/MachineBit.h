@@ -4,7 +4,7 @@
 #define isBusybox 1
 #define isLubuntu32 0
 #define isLubuntu64 0 
-#define QEMULOG 1 //whether record the functions call log
+#define QEMULOG 0 //whether record the functions call log
 #if osBit32 
 typedef uint32_t my_target_ulong;
 #define kernelMinAddr 0xc0000000           //if an address less than kernelMinAddr, it is in user space, otherwise in kernel space 

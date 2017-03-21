@@ -401,7 +401,7 @@ static my_target_ulong getPid(CPUState *cpu,my_target_ulong pidAddr){
 
 //get parameter
 static void printStrParameter(FILE * fp, CPUState *cpu,my_target_ulong reg){
-    char para[50];
+    char para[50]="";
     cpu_memory_rw_debug(cpu,reg,(uint8_t *)&para,sizeof(para),0);
     //fprintf(fp,MY_TARGET_FMT_lx",%s\n",reg,para);
     fprintf(fp,"%s\n",para);
@@ -567,7 +567,6 @@ FILE *stackWrite;
 
 static int funcistraced(my_target_ulong target)
 {
-    //qemu_log(TARGET_FMT_lx"|"TARGET_FMT_lx"|"TARGET_FMT_lx"\n",target,funcaddr[0],funcaddr[1]);
     int low=0,high=funccount-1,mid;
     while(low<=high){
         mid=(low+high)>>1;
@@ -601,8 +600,14 @@ static void record_stack_call(CPUArchState *env,CPUState *cpu,const logData ld){
        }
 
        if(funcParaPos[funcIndex]!=-1){
-           if(funcParaType[funcIndex]==PARASTRING) printStrParameter(stackWrite,cpu,env->regs[funcParaPos[funcIndex]]);
-           else if(funcParaType[funcIndex]==PARASOCKET) printSocket(stackWrite,cpu,env->regs[funcParaPos[funcIndex]]);
+           if(funcParaType[funcIndex]==PARASTRING){
+               printStrParameter(stackWrite,cpu,env->regs[funcParaPos[funcIndex]]);
+           }
+           else{
+               if(funcParaType[funcIndex]==PARASOCKET){
+                   printSocket(stackWrite,cpu,env->regs[funcParaPos[funcIndex]]);
+               }
+           }
        }
 
        print_stack_to_file(stackWrite,ld);
@@ -831,9 +836,12 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
         ld.curAddr = tb->pc+tb->size-1;
     }
 /////
+    int is_record_kernel = IndexOfStr(&program_list,(char *)"kernel");
+    int is_record_user = IndexOfStr(&program_list,(char *)"user");
+    int is_record_process = IndexOfStr(&program_list,processname);
 
     if(ld.curAddr>=kernel_addr_begin && ld.curAddr<kernel_addr_end){
-        if(IndexOfStr(&program_list,(char *)"kernel")!=-1 || IndexOfStr(&program_list,processname)!=-1){
+        if(is_record_kernel!=-1 || is_record_process !=-1){
             print_log_to_file(ld);
         }
         else{
@@ -844,7 +852,7 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
     }
 
     if(ld.curAddr>=user_addr_begin && ld.curAddr <user_addr_end){
-        if(IndexOfStr(&program_list,(char *)"user")!=-1 ||IndexOfStr(&program_list,processname)!=-1){
+        if(is_record_user !=-1 ||is_record_process!=-1){
             print_log_to_file(ld);
         }
         else{
@@ -855,9 +863,12 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
     }
 
 /// need record function call 
-    if(print_funcstack && funcistraced(env->eip)){
+//    if(print_funcstack && funcistraced(env->eip)){
+    if(print_funcstack){
         //record Stack 
-        record_stack(env,cpu,ld,inListFlag);
+        if(is_record_process!=-1){
+            record_stack(env,cpu,ld,inListFlag);
+        }
     }
 }
 

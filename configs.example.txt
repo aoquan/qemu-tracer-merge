@@ -1,0 +1,36 @@
+# fist line and second line default are set to 0, keep reserve
+# the third line is the name of process you are going to trace
+# the fourth line is got(GLOBAL OFFSET TABLE) address
+# follow on is the sys_call that you trace, it can be more than one row, each row consists of three elements
+## the first column is the sys call address 
+## the second one is the postion function parameter, it's bit different from the common order, it's the register number of the parameter. for example, we want to get the 5th parameter of a sys_call in x86_64 platform, the second column should be 8
+## the third column is the parameter type, now the program just include two types(struct sockaddr/string),if the parameter is a sockaddr, then the third column must be 0, if it's string, write 1
+## struct sockaddr 0
+## string          1
+
+
+##############################
+# x86 32bit                  #
+#define R_EAX 0 , parameter0 #
+#define R_EDX 2 , parameter1 #
+#define R_ECX 1 , parameter2 #  sys_write string is in ecx
+                             #
+# x86_64                     #
+#define R_EDI 7 , parameter0 #
+#define R_ESI 6 , parameter1 #
+#define R_EDX 2 , parameter2 #
+#define R_ECX 1 , parameter3 #
+              8 , parameter4 #
+              9 , parameter5 #
+##############################
+
+eg:
+0
+0
+proftpd
+692000
+ffffffff816c8580 8 0 //sendto
+ffffffff81205090 7 1 //execve
+ffffffff816c8530 6 0 //accept
+ffffffff816c8550 6 0 //connect
+ffffffff816c85b0 8 0 //recvfrom
