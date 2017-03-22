@@ -468,7 +468,6 @@ struct pt_dynamic{
     my_target_ulong d_un;
 };
 
-/*
 //get start address of link map using .got.plt section address
 static my_target_ulong getLinkMapStartAddrByGot(CPUState *cpu, my_target_ulong got){
     my_target_ulong plinkmap;
@@ -494,8 +493,7 @@ static my_target_ulong getLinkMapStartAddrByDynamic(FILE * fp,CPUState *cpu, my_
     }
     return 0;
 }
-*/
-/*
+
 // tarverse the link map and print the load address and names of SO 
 static void traverseLinkMap(FILE *fp ,CPUState *cpu,my_target_ulong plinkmap){
     struct link_map lnk_tmp;
@@ -517,9 +515,7 @@ static void traverseLinkMap(FILE *fp ,CPUState *cpu,my_target_ulong plinkmap){
     }           
     fprintf(fp,"linkmap end\n");
 }
-*/
 
-/*
 static void printLinkMap(FILE * fp,CPUState *cpu,my_target_ulong got){
     //target_ulong plinkmap = getLinkMapStartAddrByGot(cpu,got);
     my_target_ulong plinkmap;
@@ -535,7 +531,6 @@ static void printLinkMap(FILE * fp,CPUState *cpu,my_target_ulong got){
     }
     traverseLinkMap(fp,cpu,plinkmap);
 }
-*/
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //extern my_target_ulong kernel_start,kernel_end,funcaddr[];
@@ -546,7 +541,6 @@ extern int funccount;
 const int argorder[6]={R_EDI,R_ESI,R_EDX,R_ECX,8,9};
 extern target_ulong got;
 extern target_ulong ptDynamic;
-extern bool print_link_map;
 extern bool print_funcstack;
 extern List  program_list;
 extern my_target_ulong  kernel_addr_begin,kernel_addr_end,user_addr_begin,user_addr_end;
@@ -619,7 +613,9 @@ static void record_stack_call(CPUArchState *env,CPUState *cpu,const logData ld){
        }
        fprintf(stackWrite,"\n");
        curThread->stack->pTop = stackTop;
-       //printLinkMap(stackWrite,cpu,got);
+       if(got!=0){
+           printLinkMap(stackWrite,cpu,got);
+       }
    }
 
    if(ld.esp<kernelMinAddr){

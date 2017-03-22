@@ -147,7 +147,6 @@ int funcParaPos[FUNC_MAX],funcParaType[FUNC_MAX];
 int funccount=0;
 char funcargv[FUNC_MAX][PRAM_MAX],target[16];
 my_target_ulong got;
-bool print_link_map;
 bool print_funcstack;
 
 #define MAX_VIRTIO_CONSOLES 1
@@ -3042,14 +3041,17 @@ static int read_configs(void){
 
     // read information about printing linkMap or not
     if(fgets(line,sizeof(line)/sizeof(char),fp)==NULL){
-        printf("print linkMap parameter error!");
+        printf("print linkmap parameter error!");
         exit(0);
     }
-    if(strstr(line,"linkmap:1")!=NULL){
-        print_link_map = true;
+    item = strtok(line,(char*)":");
+    if(strcmp(item,"linkmap")!=0){
+        printf("print linkmap parameter error!");
+        exit(0);
     }
-    else{
-        print_link_map = false;
+    item =  strtok(NULL,(char*)":");
+    if(strcmp(item,"0")!=0){
+        got = hex2int(item);
     }
 
     // read information about printing function stack or not
