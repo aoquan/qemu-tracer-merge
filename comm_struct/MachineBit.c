@@ -12,10 +12,10 @@ int upper2lower(int c)
     } 
 } 
 
-int hex2int(char s[]) 
+uint64_t hex2int(char s[]) 
 { 
     int i; 
-    int n = 0; 
+    uint64_t n = 0; 
     if (s[0] == '0' && (s[1]=='x' || s[1]=='X')) //判断是否有前导0x或者0X
     { 
         i = 2; 

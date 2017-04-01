@@ -383,7 +383,7 @@ static void cpu_handle_debug_exception(CPUState *cpu)
     cc->debug_excp_handler(cpu);
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-static my_target_ulong getParentPid(CPUState *cpu,my_target_ulong realParentAddr){
+static inline my_target_ulong getParentPid(CPUState *cpu,my_target_ulong realParentAddr){
     my_target_ulong pts=0 ; //parent task_struct
     my_target_ulong ppid=0; //parent pid 
     my_target_ulong tmp=0;
@@ -392,20 +392,10 @@ static my_target_ulong getParentPid(CPUState *cpu,my_target_ulong realParentAddr
     return ppid;
 }
 
-static my_target_ulong getPid(CPUState *cpu,my_target_ulong pidAddr){
+static inline my_target_ulong getPid(CPUState *cpu,my_target_ulong pidAddr){
     my_target_ulong pid;
     cpu_memory_rw_debug(cpu,pidAddr,(uint8_t*)&pid,sizeof(pid),0);
     return pid;
-}
-
-
-//get parameter
-static void printStrParameter(FILE * fp, CPUState *cpu,my_target_ulong reg){
-    char para[50]="";
-    cpu_memory_rw_debug(cpu,reg,(uint8_t *)&para,sizeof(para),0);
-    //fprintf(fp,MY_TARGET_FMT_lx",%s\n",reg,para);
-    fprintf(fp,"%s\n",para);
-    return;
 }
 
 
@@ -542,6 +532,7 @@ const int argorder[6]={R_EDI,R_ESI,R_EDX,R_ECX,8,9};
 extern target_ulong got;
 extern target_ulong ptDynamic;
 extern bool print_funcstack;
+extern bool only_record_specific_func;
 extern List  program_list;
 extern my_target_ulong  kernel_addr_begin,kernel_addr_end,user_addr_begin,user_addr_end;
 
@@ -575,16 +566,39 @@ static int funcistraced(my_target_ulong target)
 }
 
 
+//get parameter
+static inline void printStrParameter(FILE * fp, CPUState *cpu,my_target_ulong reg){
+    char para[50]={0};
+    cpu_memory_rw_debug(cpu,reg,(uint8_t *)&para,sizeof(para),0);
+    fprintf(fp,"%s\n",para);
+    return;
+}
+
+static void print_parameter(FILE *fp,CPUState * cpu,my_target_ulong reg,int funcIndex){
+    if(funcParaPos[funcIndex]!=-1){
+        if(funcParaType[funcIndex]==PARASTRING){
+            printStrParameter(stackWrite,cpu,reg);
+        }
+        else{
+            if(funcParaType[funcIndex]==PARASOCKET){
+                printSocket(stackWrite,cpu,reg);
+            }
+        }
+    }
+}
+
+
 static inline void print_log_to_file(const logData ld){
-    my_qemu_log("%c,%s,"TARGET_FMT_lx","TARGET_FMT_lx","TARGET_FMT_lx",%d,"TARGET_FMT_lx"\n",ld.type,ld.processName,ld.curAddr,ld.goAddr,ld.pid,ld.tid,ld.esp);
+    my_qemu_log("%c,%s,"TARGET_FMT_lx","TARGET_FMT_lx",%d,%d,"TARGET_FMT_lx"\n",ld.type,ld.processName,ld.curAddr,ld.goAddr,(int)ld.pid,ld.tid,ld.esp);
 }
 static inline void print_stack_to_file(FILE * fp, const logData ld){
-    fprintf(fp,"%c,%s,"TARGET_FMT_lx","TARGET_FMT_lx","TARGET_FMT_lx",%d,"TARGET_FMT_lx"\n",ld.type,ld.processName,ld.curAddr,ld.goAddr,ld.pid,ld.tid,ld.esp);
+    fprintf(fp,"%c,%s,"TARGET_FMT_lx","TARGET_FMT_lx",%d,%d,"TARGET_FMT_lx"\n",ld.type,ld.processName,ld.curAddr,ld.goAddr,(int)ld.pid,ld.tid,ld.esp);
 }
+
 
 static void record_stack_call(CPUArchState *env,CPUState *cpu,const logData ld){
    int funcIndex = funcistraced(ld.goAddr);
-   if((ld.goAddr > kernelMinAddr) && funcIndex!=-1){
+   if((ld.esp > kernelMinAddr) && funcIndex!=-1){
        print_log_to_file(ld);
        //print stack
        if(curThread->pid!=ld.pid || curThread->tid!=ld.tid){
@@ -593,17 +607,7 @@ static void record_stack_call(CPUArchState *env,CPUState *cpu,const logData ld){
            }
        }
 
-       if(funcParaPos[funcIndex]!=-1){
-           if(funcParaType[funcIndex]==PARASTRING){
-               printStrParameter(stackWrite,cpu,env->regs[funcParaPos[funcIndex]]);
-           }
-           else{
-               if(funcParaType[funcIndex]==PARASOCKET){
-                   printSocket(stackWrite,cpu,env->regs[funcParaPos[funcIndex]]);
-               }
-           }
-       }
-
+       print_parameter(stackWrite,cpu,env->regs[funcParaPos[funcIndex]],funcIndex);
        print_stack_to_file(stackWrite,ld);
        void *stackTop = curThread->stack->pTop;
        logData ldTmp;
@@ -796,6 +800,7 @@ static void record_stack(CPUArchState *env,CPUState *cpu,const logData ld,int in
 static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
     target_ulong tr=env->tr.base,esp0,task;
     char processname[16];
+    //memset(processname,0,sizeof(processname));
     cpu_memory_rw_debug(cpu,tr+0x4,(uint8_t *)&esp0,sizeof(esp0),0);
 #if osBit32
     cpu_memory_rw_debug(cpu,esp0&0xffffe000,(uint8_t *)&task,sizeof(task),0);
@@ -805,12 +810,6 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
     cpu_memory_rw_debug(cpu,task+commOffset,(uint8_t *)&processname,sizeof(processname),0);
     my_target_ulong ppid = getParentPid(cpu,task+realParentOffset);
     my_target_ulong tgid = getPid(cpu,task+tgidOffset); //get tgid 
-    int inListFlag = -1;
-    if(countCpuExec == 1){
-        if(IndexOf(&tracePidList,ppid)!=-1 || IndexOf(&tracePidList,tgid)!=-1){
-            inListFlag = 0; //it can be assigned to any num but -1
-        }
-    }
 /////
     cpu->current_tb = tb;
     logData ld;
@@ -831,10 +830,22 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
         ld.esp -= sizeof(my_target_ulong);
         ld.curAddr = tb->pc+tb->size-1;
     }
+
+    //only record specific function 
+    if(only_record_specific_func && funcistraced(ld.goAddr)!=-1){
+        print_log_to_file(ld);
+        print_parameter();
+        return ;
+    }
+
+
 /////
-    int is_record_kernel = IndexOfStr(&program_list,(char *)"kernel");
-    int is_record_user = IndexOfStr(&program_list,(char *)"user");
-    int is_record_process = IndexOfStr(&program_list,processname);
+    int is_record_kernel = -1;
+    is_record_kernel = IndexOfStr(&program_list,(char *)"kernel");
+    int is_record_user = -1;
+    is_record_user = IndexOfStr(&program_list,(char *)"user");
+    int is_record_process = -1;
+    is_record_process = IndexOfStr(&program_list,processname);
 
     if(ld.curAddr>=kernel_addr_begin && ld.curAddr<kernel_addr_end){
         if(is_record_kernel!=-1 || is_record_process !=-1){
@@ -859,14 +870,28 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
     }
 
 /// need record function call 
-//    if(print_funcstack && funcistraced(env->eip)){
     if(print_funcstack){
         //record Stack 
         if(is_record_process!=-1){
+            int inListFlag = -1;
+            if(countCpuExec == 1){
+                if(IndexOf(&tracePidList,ppid)!=-1 || IndexOf(&tracePidList,tgid)!=-1){
+                    inListFlag = 0; //it can be assigned to any num but -1
+                }
+            }
+            check_priority();
             record_stack(env,cpu,ld,inListFlag);
         }
     }
+    return ;
 }
+
+void check_priority(CPUArchState *env,CPUState *cpu,my_target_ulong addr){
+    
+    
+}
+
+
 
 /* main execution loop */
 

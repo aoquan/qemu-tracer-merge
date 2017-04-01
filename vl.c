@@ -148,6 +148,7 @@ int funccount=0;
 char funcargv[FUNC_MAX][PRAM_MAX],target[16];
 my_target_ulong got;
 bool print_funcstack;
+bool only_record_specific_func;
 
 #define MAX_VIRTIO_CONSOLES 1
 #define MAX_SCLP_CONSOLES 1
@@ -2988,7 +2989,8 @@ static int read_configs(void){
     char line[200]={0};
     char * item;
     int i;
-    initList(&program_list,sizeof(char *));
+    // 16 means the longgest length of program's name
+    initList(&program_list,16); 
     if(fgets(line,sizeof(line)/sizeof(char),fp)==NULL){
         printf("read program name error!");
         exit(0);
@@ -3036,7 +3038,7 @@ static int read_configs(void){
     }
     else{
         user_addr_begin = 0;
-        user_addr_end = kernelMaxAddr;
+        user_addr_end = kernelMinAddr-1;
     }
 
     // read information about printing linkMap or not
@@ -3064,6 +3066,18 @@ static int read_configs(void){
     }
     else{
         print_funcstack = false;
+    }
+
+    // only record specified kernel function
+    if(fgets(line,sizeof(line)/sizeof(char),fp)==NULL){
+        printf("only record specified kernel function parameter error!");
+        exit(0);
+    }
+    if(strstr(line,"only_record_specific_func:1")!=NULL){
+        only_record_specific_func = true;
+    }
+    else{
+        only_record_specific_func = false;
     }
 
     //read specified address and paramenter info 
@@ -4480,7 +4494,7 @@ int main(int argc, char **argv, char **envp)
         object_unref(OBJECT(current_machine));
         exit(1);
     }
-
+    
     configure_accelerator(current_machine);
 
     if (qtest_chrdev) {
