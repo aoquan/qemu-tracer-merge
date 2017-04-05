@@ -834,7 +834,8 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
     //only record specific function 
     if(only_record_specific_func && funcistraced(ld.goAddr)!=-1){
         print_log_to_file(ld);
-        print_parameter();
+        int funcIndex = funcistraced(ld.goAddr);
+        print_parameter(stackWrite,cpu,env->regs[funcParaPos[funcIndex]],funcIndex);
         return ;
     }
 
@@ -879,17 +880,17 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
                     inListFlag = 0; //it can be assigned to any num but -1
                 }
             }
-            check_priority();
+ //           check_priority();
             record_stack(env,cpu,ld,inListFlag);
         }
     }
     return ;
 }
-
+/*
 void check_priority(CPUArchState *env,CPUState *cpu,my_target_ulong addr){
     
-    
 }
+*/
 
 
 
