@@ -1,9 +1,9 @@
 #define MACH_BIT
 #include"stdint.h"
-#define osBit32 0
-#define isBusybox 0
+#define osBit32 1
+#define isBusybox 1
 #define isLubuntu32 0
-#define isLubuntu64 1 
+#define isLubuntu64 0
 #define QEMULOG 1 //whether record the functions call log
 #if osBit32 
 typedef uint32_t my_target_ulong;

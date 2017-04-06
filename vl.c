@@ -2984,6 +2984,7 @@ static int print_str_list(char * a,void *e){
 }
 
 static int read_configs(void){
+
 //  read program_name;
     FILE *fp = fopen("configs.txt","r");
     char line[200]={0};

@@ -547,6 +547,19 @@ threadList* tl ;
 logData ld,ldPop;
 int countCpuExec = 0;
 FILE *stackWrite;
+pthread_mutex_t singleton_lock=PTHREAD_MUTEX_INITIALIZER; 
+//singleton model
+static void get_write_file(void){
+    pthread_mutex_lock(&singleton_lock);
+    if(!stackWrite){
+        stackWrite = fopen("stack","w");
+        if(NULL == stackWrite){
+            pthread_mutex_unlock(&singleton_lock);
+            exit(0);
+        }
+    }
+    pthread_mutex_unlock(&singleton_lock);
+}
 //added by aquan
 ////////////////////////////////////////////////////
 
@@ -772,10 +785,15 @@ static void record_stack(CPUArchState *env,CPUState *cpu,const logData ld,int in
         initList(&tracePidList,sizeof(int));
         appendList(&tracePidList,&ld.tid); // the first pid ,parent of all other process 
         curThread = malloc(sizeof(threadList));
-        stackWrite = fopen("stack","w");
-        if(NULL == stackWrite){
-            exit(0);
+        /*
+        if(!stackWrite){
+            stackWrite = fopen("stack","w");
+            if(NULL == stackWrite){
+                exit(0);
+            }
         }
+        */
+        get_write_file();
         fprintf(stackWrite,"P,%d,%d,%d\n",(int)ld.ppid,(int)ld.tid,(int)ld.pid);
     }
     if(countCpuExec == 1 && inListFlag != -1){
@@ -831,11 +849,19 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
         ld.curAddr = tb->pc+tb->size-1;
     }
 
+    int is_record_process = -1;
+    is_record_process = IndexOfStr(&program_list,processname);
+
     //only record specific function 
-    if(only_record_specific_func && funcistraced(ld.goAddr)!=-1){
-        print_log_to_file(ld);
-        int funcIndex = funcistraced(ld.goAddr);
-        print_parameter(stackWrite,cpu,env->regs[funcParaPos[funcIndex]],funcIndex);
+    if(only_record_specific_func){
+        if(funcistraced(ld.goAddr)!=-1){
+            if(is_record_process !=-1){
+                print_log_to_file(ld);
+                fprintf(stackWrite,"%d,"TARGET_FMT_lx"\n",ld.tid,ld.goAddr);
+                //int funcIndex = funcistraced(ld.goAddr);
+                //print_parameter(stackWrite,cpu,env->regs[funcParaPos[funcIndex]],funcIndex);
+            }
+        }
         return ;
     }
 
@@ -845,8 +871,6 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
     is_record_kernel = IndexOfStr(&program_list,(char *)"kernel");
     int is_record_user = -1;
     is_record_user = IndexOfStr(&program_list,(char *)"user");
-    int is_record_process = -1;
-    is_record_process = IndexOfStr(&program_list,processname);
 
     if(ld.curAddr>=kernel_addr_begin && ld.curAddr<kernel_addr_end){
         if(is_record_kernel!=-1 || is_record_process !=-1){
@@ -900,6 +924,7 @@ volatile sig_atomic_t exit_request;
 
 int cpu_exec(CPUState *cpu)
 {
+    get_write_file();
 
     CPUClass *cc = CPU_GET_CLASS(cpu);
 #ifdef TARGET_I386
