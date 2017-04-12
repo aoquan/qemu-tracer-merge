@@ -44,5 +44,29 @@ typedef uint64_t my_target_ulong;
 #define realParentOffset 0x204 //busybox
 #endif 
 
+#define PARA_SOCKET 0
+#define PARA_STRING 1 
+#define PARA_INT 20
+
+#define RECORD_FUNC_NO -1 //do not use this condition 
+#define RECORD_SPEC_FUNC 1
+#define RECORD_ALL_FUNC_WITHOUT_PARA 2
+#define RECORD_ALL_FUNC_WITH_PARA 3
+
+#define FUNC_MAX 300
+#define PARAM_MAX 6
+//my_target_ulong kernel_start,kernel_end,funcaddr[FUNC_MAX];
+typedef struct{
+    int pos;
+    int reg;
+    char type[20];
+    int i_type; //using int to describe char type [20]
+}Func_para;
+
+typedef struct{
+    my_target_ulong funcaddr;
+    Func_para para[PARAM_MAX];
+    int para_num;
+}Trace_func;
 uint64_t hex2int(char s[]);
 int upper2lower(int c);

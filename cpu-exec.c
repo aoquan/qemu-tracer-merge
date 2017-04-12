@@ -34,10 +34,11 @@
 //#include "header/List.h"
 //#include "header/MachineBit.h"
 #include "include/comm_struct/List.h"
-
-#define PARASOCKET 0 
-#define PARASTRING 1 
-
+/*
+#define PARA_SOCKET 0 
+#define PARA_STRING 1 
+#define PARA_INT 2
+*/
 //merge all function
 #define RECORD_ALL_CALL_RET 0
 #define RECORD_USER_CALL_RET 0
@@ -47,8 +48,6 @@
 #define RECORD_SPECIFIC_FUNC 0
 #define RECORD_SPECIFIC_PROGRAM 0
 int record_what;
-bool record_kernel = true;
-bool record_user = true;
 //end merge
 
 
@@ -524,17 +523,23 @@ static void printLinkMap(FILE * fp,CPUState *cpu,my_target_ulong got){
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //extern my_target_ulong kernel_start,kernel_end,funcaddr[];
+/*
 extern my_target_ulong funcaddr[];
 extern int funcParaPos[],funcParaType[];
 extern char funcargv[][6],target[];
+*/
+
+extern Trace_func trace_func[];
+
+
 extern int funccount;
 const int argorder[6]={R_EDI,R_ESI,R_EDX,R_ECX,8,9};
 extern target_ulong got;
 extern target_ulong ptDynamic;
 extern bool print_funcstack;
-extern bool only_record_specific_func;
 extern List  program_list;
 extern my_target_ulong  kernel_addr_begin,kernel_addr_end,user_addr_begin,user_addr_end;
+extern int is_record_kernel,is_record_user,only_record_specific_func;
 
 bool output=false;
 ////////////////////////////////////////////////////
@@ -568,9 +573,11 @@ static int funcistraced(my_target_ulong target)
     int low=0,high=funccount-1,mid;
     while(low<=high){
         mid=(low+high)>>1;
-        if(funcaddr[mid]>target)
+//        if(funcaddr[mid]>target)
+        if(trace_func[mid].funcaddr > target)
             high=mid-1;
-        else if(funcaddr[mid]<target)
+//        else if(funcaddr[mid]<target)
+        else if(trace_func[mid].funcaddr < target)
             low=mid+1;
         else
             return mid;
@@ -587,6 +594,11 @@ static inline void printStrParameter(FILE * fp, CPUState *cpu,my_target_ulong re
     return;
 }
 
+static inline void printIntParameter(FILE * fp,my_target_ulong reg){
+    fprintf(fp,MY_TARGET_FMT_lx,reg);
+}
+
+/*
 static void print_parameter(FILE *fp,CPUState * cpu,my_target_ulong reg,int funcIndex){
     if(funcParaPos[funcIndex]!=-1){
         if(funcParaType[funcIndex]==PARASTRING){
@@ -598,6 +610,34 @@ static void print_parameter(FILE *fp,CPUState * cpu,my_target_ulong reg,int func
             }
         }
     }
+}
+*/
+
+static void print_parameter(FILE *fp,CPUArchState *env,CPUState *cpu,int funcIndex){
+    int i;
+    for(i=0;i<trace_func[funcIndex].para_num;i++){
+        my_target_ulong reg  =  env->regs[trace_func[funcIndex].para[i].reg];
+        switch(trace_func[funcIndex].para[i].i_type){
+            case PARA_SOCKET :
+                printSocket(stackWrite,cpu,reg);
+                break;
+            case PARA_STRING :
+                printStrParameter(stackWrite,cpu,reg);
+                break;
+            case PARA_INT :
+                printIntParameter(stackWrite,reg);
+                break;
+        }
+    }
+    fprintf(fp,"\n");
+}
+
+static void print_all_regs_para(CPUArchState *env){
+#if osBit32
+    my_qemu_log(TARGET_FMT_lx" "TARGET_FMT_lx" "TARGET_FMT_lx"\n",env->regs[R_EAX],env->regs[R_ECX],env->regs[R_EDX]);
+#else
+    my_qemu_log(MY_TARGET_FMT_lx" "MY_TARGET_FMT_lx" "MY_TARGET_FMT_lx" "MY_TARGET_FMT_lx" "MY_TARGET_FMT_lx" "MY_TARGET_FMT_lx"\n",,env->regs[R_EDI],env->regs[R_ESI],env->regs[R_EDX],env->regs[R_ECX],env->regs[8],env->regs[9]);
+#endif
 }
 
 
@@ -620,7 +660,9 @@ static void record_stack_call(CPUArchState *env,CPUState *cpu,const logData ld){
            }
        }
 
-       print_parameter(stackWrite,cpu,env->regs[funcParaPos[funcIndex]],funcIndex);
+//       print_parameter(stackWrite,cpu,env->regs[funcParaPos[funcIndex]],funcIndex);
+       print_parameter(stackWrite,env,cpu,funcIndex);
+       if(funcIndex!=-1) print_parameter(stackWrite,env,cpu,funcIndex);
        print_stack_to_file(stackWrite,ld);
        void *stackTop = curThread->stack->pTop;
        logData ldTmp;
@@ -853,44 +895,46 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
     is_record_process = IndexOfStr(&program_list,processname);
 
     //only record specific function 
-    if(only_record_specific_func){
-        if(funcistraced(ld.goAddr)!=-1){
-            if(is_record_process !=-1){
-                print_log_to_file(ld);
-                fprintf(stackWrite,"%d,"TARGET_FMT_lx"\n",ld.tid,ld.goAddr);
-                //int funcIndex = funcistraced(ld.goAddr);
-                //print_parameter(stackWrite,cpu,env->regs[funcParaPos[funcIndex]],funcIndex);
+    switch(only_record_specific_func){
+        case RECORD_SPEC_FUNC :
+            if(funcistraced(ld.goAddr)!=-1){
+                if(is_record_process !=-1){
+                    print_log_to_file(ld);
+                    //fprintf(stackWrite,"%d,"TARGET_FMT_lx"\n",ld.tid,ld.goAddr);
+                    //int funcIndex = funcistraced(ld.goAddr);
+                    //print_parameter(stackWrite,cpu,env->regs[funcParaPos[funcIndex]],funcIndex);
+                }
             }
-        }
-        return ;
+            return ;
+        case RECORD_ALL_FUNC_WITHOUT_PARA:
+            print_log_to_file(ld);
+            return;
+        case RECORD_ALL_FUNC_WITH_PARA:
+            print_log_to_file(ld);
+            print_all_regs_para(env);
+            return;
     }
 
 
 /////
-    int is_record_kernel = -1;
+    /*
+    is_record_kernel = -1;
     is_record_kernel = IndexOfStr(&program_list,(char *)"kernel");
     int is_record_user = -1;
     is_record_user = IndexOfStr(&program_list,(char *)"user");
+    */
 
     if(ld.curAddr>=kernel_addr_begin && ld.curAddr<kernel_addr_end){
         if(is_record_kernel!=-1 || is_record_process !=-1){
             print_log_to_file(ld);
-        }
-        else{
-            if(record_kernel ==true){
-                print_log_to_file(ld);
-            }
+            print_all_regs_para(env);
         }
     }
 
     if(ld.curAddr>=user_addr_begin && ld.curAddr <user_addr_end){
         if(is_record_user !=-1 ||is_record_process!=-1){
             print_log_to_file(ld);
-        }
-        else{
-            if(record_user == true){
-                print_log_to_file(ld);
-            }
+            print_all_regs_para(env);
         }
     }
 

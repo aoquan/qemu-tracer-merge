@@ -139,16 +139,64 @@ typedef uint64_t target_ulong;
 #define TARGET_lx "%" PRIx64
 //~ typedef uint32_t target_ulong;
 //~ #define TARGET_lx "%08x"
-#define FUNC_MAX 30000
-#define PRAM_MAX 6
-//my_target_ulong kernel_start,kernel_end,funcaddr[FUNC_MAX];
-my_target_ulong funcaddr[FUNC_MAX];
-int funcParaPos[FUNC_MAX],funcParaType[FUNC_MAX];
+
+
+//my_target_ulong funcaddr[FUNC_MAX];
+//int funcParaPos[FUNC_MAX][PARAM_MAX];
+//char funcParaType[FUNC_MAX][PARAM_MAX][20];
 int funccount=0;
-char funcargv[FUNC_MAX][PRAM_MAX],target[16];
+char target[16];
 my_target_ulong got;
 bool print_funcstack;
-bool only_record_specific_func;
+int only_record_specific_func;
+
+Trace_func trace_func[FUNC_MAX];
+static void map_reg(void){
+    int byte = sizeof(my_target_ulong);
+    FILE * fp;
+    fp = fopen("reg_map.txt","r");
+    int map[9]={0};
+    int b,i=0,j;
+    char ch[10]={0};
+    int to;
+
+    while(fscanf(fp,"%d %s %d --> %d",&b,ch,&to,map+i)!=EOF){
+        if(i++==9) break;
+    }
+    fclose(fp);
+
+   for(i=0;i<funccount;i++){
+       for(j=0;j<trace_func[i].para_num;j++){
+           if(byte==4){
+               int pos = trace_func[i].para[j].pos;
+               if(pos>2){
+                    printf("reg_map.txt error,regs num can't great then 2 in x86_32\n");
+                    exit(0);
+               }
+               trace_func[i].para[j].reg = map[trace_func[i].para[j].pos];
+           }
+           else if(byte==8){
+               int pos = trace_func[i].para[j].pos;
+               if(pos>5){
+                    printf("reg_map.txt error,regs num can't great then 5 in x86_64\n");
+                    exit(0);
+               }
+               trace_func[i].para[j].reg = map[trace_func[i].para[j].pos+3];
+           }
+           
+           if(strcmp(trace_func[i].para[j].type,"int")==0){
+               trace_func[i].para[j].i_type = PARA_INT;
+           }
+           else if(strcmp(trace_func[i].para[j].type,"string")==0){
+               trace_func[i].para[j].i_type = PARA_STRING;
+           }
+           else if(strcmp(trace_func[i].para[j].type,"socket")==0){
+               trace_func[i].para[j].i_type = PARA_SOCKET;
+           }
+       }
+   }
+}
+
 
 #define MAX_VIRTIO_CONSOLES 1
 #define MAX_SCLP_CONSOLES 1
@@ -2977,6 +3025,9 @@ my_target_ulong kernel_addr_end;
 my_target_ulong user_addr_begin ;
 my_target_ulong user_addr_end;
 
+int is_record_kernel;
+int is_record_user;
+
 
 static int print_str_list(char * a,void *e){
     printf("%s     ",a);
@@ -2989,7 +3040,7 @@ static int read_configs(void){
     FILE *fp = fopen("configs.txt","r");
     char line[200]={0};
     char * item;
-    int i;
+    int i,j;
     // 16 means the longgest length of program's name
     initList(&program_list,16); 
     if(fgets(line,sizeof(line)/sizeof(char),fp)==NULL){
@@ -3069,16 +3120,24 @@ static int read_configs(void){
         print_funcstack = false;
     }
 
+    only_record_specific_func = RECORD_FUNC_NO;
+
     // only record specified kernel function
     if(fgets(line,sizeof(line)/sizeof(char),fp)==NULL){
         printf("only record specified kernel function parameter error!");
         exit(0);
     }
     if(strstr(line,"only_record_specific_func:1")!=NULL){
-        only_record_specific_func = true;
+        //only record specific func call 
+        only_record_specific_func = RECORD_SPEC_FUNC;
     }
-    else{
-        only_record_specific_func = false;
+    else if(strstr(line,"only_record_specific_func:2")!=NULL){
+        //record all func without parameter
+        only_record_specific_func = RECORD_ALL_FUNC_WITHOUT_PARA;
+    }
+    else if(strstr(line,"only_record_specific_func:3")!=NULL){
+        //record all func with parameter
+        only_record_specific_func = RECORD_ALL_FUNC_WITH_PARA;
     }
 
     //read specified address and paramenter info 
@@ -3087,20 +3146,35 @@ static int read_configs(void){
         line_len=strlen(line);
         line[line_len-1]=0;
         item=strtok(line,(char*)",");
-        funcaddr[funccount] = hex2int(item);
-        item = strtok(NULL,(char*)",");
-        funcParaPos[funccount] = hex2int(item);
-        item = strtok(NULL,(char*)",");
-        funcParaType[funccount] = hex2int(item);
+//        funcaddr[funccount] = hex2int(item);
+        trace_func[funccount].funcaddr=hex2int(item);
+
+        j=0;
+        while(item){
+            item = strtok(NULL,(char*)",");
+            if(!item) break;
+            trace_func[funccount].para[j].pos = hex2int(item);
+            item = strtok(NULL,(char*)",");
+            memcpy(trace_func[funccount].para[j].type,item,strlen(item));
+            j++;
+        }
+        trace_func[funccount].para_num = j;
         funccount++;
     }
-    
+    fclose(fp);
+    map_reg();
+
     printf(MY_TARGET_lx","MY_TARGET_lx"\n",kernel_addr_begin,kernel_addr_end);
     printf(MY_TARGET_lx","MY_TARGET_lx"\n",user_addr_begin,user_addr_end);
     for(i=0;i<funccount;i++){
-        printf(MY_TARGET_lx" %d %d\n",funcaddr[i],funcParaPos[i],funcParaType[i]);
+        printf(MY_TARGET_lx" ",trace_func[i].funcaddr);
+        for(j=0;j<trace_func[i].para_num;j++){
+            printf("pos:%d reg:%d type:%s itype:%d\n",trace_func[i].para[j].pos,trace_func[i].para[j].reg,trace_func[i].para[j].type,trace_func[i].para[j].i_type);
+        }
     }
-    fclose(fp);
+
+    is_record_kernel = IndexOfStr(&program_list,(char *)"kernel");
+    is_record_user = IndexOfStr(&program_list,(char *)"user");
 
     return 0;
 }
