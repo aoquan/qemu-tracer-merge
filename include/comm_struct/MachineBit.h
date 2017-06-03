@@ -17,7 +17,7 @@ typedef uint64_t my_target_ulong;
 #define kernelMinAddr 0xf000000000000000
 #define kernelMaxAddr 0xffffffffffffffff
 #define gotMinAddr 0x0000555555554000 
-#define MY_TARGET_FMT_lx "%016lx" PRIx64
+#define MY_TARGET_FMT_lx "%016" PRIx64
 #define MY_TARGET_lx "%" PRIx64
 #endif
 
@@ -38,15 +38,15 @@ typedef uint64_t my_target_ulong;
 #endif
 
 #if isBusybox
-#define commOffset 0x2d4 //busybox 
-#define pidOffset 0x1f8 //busybox 
-#define tgidOffset 0x1fc //busybox 
-#define realParentOffset 0x204 //busybox
+#define commOffset 0x2cc //busybox 
+#define pidOffset 0x1f4 //busybox 
+#define tgidOffset 0x1f8 //busybox 
+#define realParentOffset 0x1fc //busybox
 #endif 
 
-#define PARA_SOCKET 0
+#define PARA_INT 0
 #define PARA_STRING 1 
-#define PARA_INT 20
+#define PARA_SOCKET 2
 
 #define RECORD_FUNC_NO -1 //do not use this condition 
 #define RECORD_SPEC_FUNC 1

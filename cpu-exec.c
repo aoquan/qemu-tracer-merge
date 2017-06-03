@@ -35,9 +35,9 @@
 //#include "header/MachineBit.h"
 #include "include/comm_struct/List.h"
 /*
-#define PARA_SOCKET 0 
+#define PARA_INT 0
 #define PARA_STRING 1 
-#define PARA_INT 2
+#define PARA_SOCKET 2
 */
 //merge all function
 #define RECORD_ALL_CALL_RET 0
@@ -590,28 +590,14 @@ static int funcistraced(my_target_ulong target)
 static inline void printStrParameter(FILE * fp, CPUState *cpu,my_target_ulong reg){
     char para[50]={0};
     cpu_memory_rw_debug(cpu,reg,(uint8_t *)&para,sizeof(para),0);
-    fprintf(fp,"%s\n",para);
+    fprintf(fp,"%s,---hahaha---\n",para);
     return;
 }
 
 static inline void printIntParameter(FILE * fp,my_target_ulong reg){
-    fprintf(fp,MY_TARGET_FMT_lx,reg);
+    fprintf(fp,MY_TARGET_FMT_lx",",reg);
+    fprintf(fp,"=====,");
 }
-
-/*
-static void print_parameter(FILE *fp,CPUState * cpu,my_target_ulong reg,int funcIndex){
-    if(funcParaPos[funcIndex]!=-1){
-        if(funcParaType[funcIndex]==PARASTRING){
-            printStrParameter(stackWrite,cpu,reg);
-        }
-        else{
-            if(funcParaType[funcIndex]==PARASOCKET){
-                printSocket(stackWrite,cpu,reg);
-            }
-        }
-    }
-}
-*/
 
 static void print_parameter(FILE *fp,CPUArchState *env,CPUState *cpu,int funcIndex){
     int i;
@@ -636,7 +622,7 @@ static void print_all_regs_para(CPUArchState *env){
 #if osBit32
     my_qemu_log(TARGET_FMT_lx" "TARGET_FMT_lx" "TARGET_FMT_lx"\n",env->regs[R_EAX],env->regs[R_ECX],env->regs[R_EDX]);
 #else
-    my_qemu_log(MY_TARGET_FMT_lx" "MY_TARGET_FMT_lx" "MY_TARGET_FMT_lx" "MY_TARGET_FMT_lx" "MY_TARGET_FMT_lx" "MY_TARGET_FMT_lx"\n",,env->regs[R_EDI],env->regs[R_ESI],env->regs[R_EDX],env->regs[R_ECX],env->regs[8],env->regs[9]);
+    my_qemu_log(MY_TARGET_FMT_lx" "MY_TARGET_FMT_lx" "MY_TARGET_FMT_lx" "MY_TARGET_FMT_lx" "MY_TARGET_FMT_lx" "MY_TARGET_FMT_lx"\n",env->regs[R_EDI],env->regs[R_ESI],env->regs[R_EDX],env->regs[R_ECX],env->regs[8],env->regs[9]);
 #endif
 }
 
@@ -860,7 +846,7 @@ static void record_stack(CPUArchState *env,CPUState *cpu,const logData ld,int in
 static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
     target_ulong tr=env->tr.base,esp0,task;
     char processname[16];
-    //memset(processname,0,sizeof(processname));
+//    memset(processname,0,sizeof(processname));
     cpu_memory_rw_debug(cpu,tr+0x4,(uint8_t *)&esp0,sizeof(esp0),0);
 #if osBit32
     cpu_memory_rw_debug(cpu,esp0&0xffffe000,(uint8_t *)&task,sizeof(task),0);
@@ -901,8 +887,10 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
                 if(is_record_process !=-1){
                     print_log_to_file(ld);
                     //fprintf(stackWrite,"%d,"TARGET_FMT_lx"\n",ld.tid,ld.goAddr);
-                    //int funcIndex = funcistraced(ld.goAddr);
+                    int funcIndex = funcistraced(ld.goAddr);
                     //print_parameter(stackWrite,cpu,env->regs[funcParaPos[funcIndex]],funcIndex);
+                    fprintf(stackWrite,TARGET_FMT_lx"\n",ld.goAddr);
+                    print_parameter(stackWrite,env,cpu,funcIndex);
                 }
             }
             return ;
