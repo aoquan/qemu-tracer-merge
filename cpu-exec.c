@@ -30,15 +30,7 @@
 #include "exec/tb-hash.h"
 
 
-//#include "header/Stack.h"
-//#include "header/List.h"
-//#include "header/MachineBit.h"
 #include "include/comm_struct/List.h"
-/*
-#define PARA_INT 0
-#define PARA_STRING 1 
-#define PARA_SOCKET 2
-*/
 //merge all function
 #define RECORD_ALL_CALL_RET 0
 #define RECORD_USER_CALL_RET 0
@@ -48,6 +40,7 @@
 #define RECORD_SPECIFIC_FUNC 0
 #define RECORD_SPECIFIC_PROGRAM 0
 int record_what;
+target_ulong task;
 //end merge
 
 
@@ -460,13 +453,15 @@ static int print_file_inode_by_chmodfunc(FILE * fp,CPUState *cpu,my_target_ulong
     int i_mode_offset = 0x0;
     int i_uid_offset = 0x4;
     int i_gid_offset = 0x8;
+    int i_ino_offset = 0x40;
 
-    my_target_ulong d_inode,i_mode,i_uid,i_gid;
+    my_target_ulong d_inode,i_mode,i_uid,i_gid,i_ino;
     cpu_memory_rw_debug(cpu,dentry+d_inode_offset,(uint8_t *)&d_inode,sizeof(d_inode),0);
     cpu_memory_rw_debug(cpu,d_inode+i_mode_offset,(uint8_t *)&i_mode,sizeof(i_mode),0);
     cpu_memory_rw_debug(cpu,d_inode+i_uid_offset,(uint8_t *)&i_uid,sizeof(i_uid),0);
     cpu_memory_rw_debug(cpu,d_inode+i_gid_offset,(uint8_t *)&i_gid,sizeof(i_gid),0);
-    fprintf(fp,"file inode info, mode:%o, uid:%d, gid:%d\n",(short)i_mode,(int)i_uid,(int)i_gid);
+    cpu_memory_rw_debug(cpu,d_inode+i_ino_offset,(uint8_t *)&i_ino,sizeof(i_ino),0);
+    fprintf(fp,"file inode:%d, mode:%o, uid:%d, gid:%d\n",(int)i_ino,(short)i_mode,(int)i_uid,(int)i_gid);
     return 0;
 }
 
@@ -635,13 +630,12 @@ static int funcistraced(my_target_ulong target)
 static inline void printStrParameter(FILE * fp, CPUState *cpu,my_target_ulong reg){
     char para[50]={0};
     cpu_memory_rw_debug(cpu,reg,(uint8_t *)&para,sizeof(para),0);
-    fprintf(fp,"%s,---hahaha---\n",para);
+    fprintf(fp,"%s,",para);
     return;
 }
 
 static inline void printIntParameter(FILE * fp,my_target_ulong reg){
     fprintf(fp,MY_TARGET_FMT_lx",",reg);
-    fprintf(fp,"=====,");
 }
 
 static void print_parameter(FILE *fp,CPUArchState *env,CPUState *cpu,int funcIndex){
@@ -658,6 +652,12 @@ static void print_parameter(FILE *fp,CPUArchState *env,CPUState *cpu,int funcInd
             case PARA_INT :
                 printIntParameter(stackWrite,reg);
                 break;
+            case PARA_CRED :
+                print_cred_by_task_struct(stackWrite,cpu,task);
+                break;
+            case PARA_INODE :
+                print_file_inode_by_chmodfunc(stackWrite,cpu,env->regs[R_EDI]);
+
         }
     }
     fprintf(fp,"\n");
@@ -889,7 +889,7 @@ static void record_stack(CPUArchState *env,CPUState *cpu,const logData ld,int in
 }
 
 static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
-    target_ulong tr=env->tr.base,esp0,task;
+    target_ulong tr=env->tr.base,esp0;
     char processname[16];
 //    memset(processname,0,sizeof(processname));
     cpu_memory_rw_debug(cpu,tr+0x4,(uint8_t *)&esp0,sizeof(esp0),0);
@@ -936,29 +936,10 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
                     //print_parameter(stackWrite,cpu,env->regs[funcParaPos[funcIndex]],funcIndex);
                     fprintf(stackWrite,TARGET_FMT_lx"\n",ld.goAddr);
                     print_parameter(stackWrite,env,cpu,funcIndex);
-                    
-                    /*
-                        print priorities
-                    */
-                    /* //busybox
-                    int notify_change_addr = 0xc11083d0;
-                    int sys_chmod_addr = 0xc10f0fd0;
-                    */
-                    my_target_ulong notify_change_addr = 0xffffffff81219d30;
-                    my_target_ulong sys_chmod_addr = 0xffffffff811fb8f0;
-                    
-                    if(ld.goAddr == notify_change_addr){ //notify_change
-                        print_cred_by_task_struct(stackWrite,cpu,task);
-                        print_file_inode_by_chmodfunc(stackWrite,cpu,env->regs[R_EDI]);
-                    }
-                    if(ld.goAddr == sys_chmod_addr){ //sys_chmod
-                        char file_name[50]={0};
-                        cpu_memory_rw_debug(cpu,env->regs[R_EDI],(uint8_t *)&file_name,sizeof(file_name),0);
-                        fprintf(stackWrite,"file name: %s, mode changed into: %d\n",file_name,(int)env->regs[R_ESI]);
-                    }
-
+                    fprintf(stackWrite,"********************************************\n");
                 }
             }
+//            if(ld.goAddr == )
             return ;
         case RECORD_ALL_FUNC_WITHOUT_PARA:
             print_log_to_file(ld);

@@ -193,6 +193,12 @@ static void map_reg(void){
            else if(strcmp(trace_func[i].para[j].type,"socket")==0){
                trace_func[i].para[j].i_type = PARA_SOCKET;
            }
+           else if(strcmp(trace_func[i].para[j].type,"cred")==0){
+               trace_func[i].para[j].i_type = PARA_CRED;
+           }
+           else if(strcmp(trace_func[i].para[j].type,"inode")==0){
+               trace_func[i].para[j].i_type = PARA_INODE;
+           }
        }
    }
 }
