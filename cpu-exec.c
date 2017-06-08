@@ -586,13 +586,19 @@ bool output=false;
 //added by aquan
 List L;
 List tracePidList;
+List retAddrList;
+my_target_ulong retAddrTmp;
+bool is_list_init = false;
 threadList* curThread;
 Stack* s;
 threadList* tl ;
 logData ld,ldPop;
+logData ld_global,ldPop_global;
 int countCpuExec = 0;
 FILE *stackWrite;
 pthread_mutex_t singleton_lock=PTHREAD_MUTEX_INITIALIZER; 
+bool prev_is_ret = false;
+
 //singleton model
 static void get_write_file(void){
     pthread_mutex_lock(&singleton_lock);
@@ -604,6 +610,13 @@ static void get_write_file(void){
         }
     }
     pthread_mutex_unlock(&singleton_lock);
+}
+
+static void init_some_list(void){
+    if(!is_list_init){
+        initList(&retAddrList,sizeof(my_target_ulong));
+        is_list_init = true;
+    }
 }
 //added by aquan
 ////////////////////////////////////////////////////
@@ -662,6 +675,11 @@ static void print_parameter(FILE *fp,CPUArchState *env,CPUState *cpu,int funcInd
     }
     fprintf(fp,"\n");
 }
+
+static inline void print_return(FILE *fp,my_target_ulong eax,my_target_ulong retAddr,logData ld){
+    fprintf(fp,"%c,%s,"TARGET_FMT_lx","TARGET_FMT_lx",%d,%d,"TARGET_FMT_lx"\n",'A',ld.processName,retAddr,eax,(int)ld.pid,ld.tid,ld.esp);
+}
+
 
 static void print_all_regs_para(CPUArchState *env){
 #if osBit32
@@ -887,8 +905,7 @@ static void record_stack(CPUArchState *env,CPUState *cpu,const logData ld,int in
     }
 
 }
-
-static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
+static logData get_logdata(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
     target_ulong tr=env->tr.base,esp0;
     char processname[16];
 //    memset(processname,0,sizeof(processname));
@@ -921,14 +938,27 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
         ld.esp -= sizeof(my_target_ulong);
         ld.curAddr = tb->pc+tb->size-1;
     }
+    return ld;
+}
 
+static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
+    ld = get_logdata(env,cpu,tb);
+    ld_global = ld;
     int is_record_process = -1;
-    is_record_process = IndexOfStr(&program_list,processname);
-
+    is_record_process = IndexOfStr(&program_list,ld.processName);
     //only record specific function 
     switch(only_record_specific_func){
         case RECORD_SPEC_FUNC :
             if(funcistraced(ld.goAddr)!=-1){
+
+                /*   in order to record the return value, we need record current addr + 2
+                 *   eg: curaddr = 0x400554, return address is 0x400556
+                 *   400551:   e8 e1 ff ff ff          callq  400537 <b>
+                 *   400556:   bf ff 05 40 00          mov    $0x4005ff,%edi
+                */
+                //appendList(&retAddrList,&ld.curAddr+2); 
+                retAddrTmp = ld.curAddr+2;
+
                 if(is_record_process !=-1){
                     print_log_to_file(ld);
                     //fprintf(stackWrite,"%d,"TARGET_FMT_lx"\n",ld.tid,ld.goAddr);
@@ -979,7 +1009,7 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
         if(is_record_process!=-1){
             int inListFlag = -1;
             if(countCpuExec == 1){
-                if(IndexOf(&tracePidList,ppid)!=-1 || IndexOf(&tracePidList,tgid)!=-1){
+                if(IndexOf(&tracePidList,ld.ppid)!=-1 || IndexOf(&tracePidList,ld.pid)!=-1){
                     inListFlag = 0; //it can be assigned to any num but -1
                 }
             }
@@ -1004,6 +1034,7 @@ volatile sig_atomic_t exit_request;
 int cpu_exec(CPUState *cpu)
 {
     get_write_file();
+    init_some_list();
 
     CPUClass *cc = CPU_GET_CLASS(cpu);
 #ifdef TARGET_I386
@@ -1175,32 +1206,22 @@ int cpu_exec(CPUState *cpu)
                     if(qemu_loglevel_mask(CPU_LOG_FUNC) && (next_tb & TB_EXIT_MASK)<2){
                         if(tb->type==TB_CALL || tb->type==TB_RET){
                             record_info(env,cpu,tb);
+                            if(tb->type == TB_RET){
+                                prev_is_ret = true;
+                            }
+                            else{
+                                prev_is_ret = false;
+                            }
                         }
-                        /*target_ulong pid=env->cr[3],esp=env->regs[R_ESP];
-                          char modulename[64-sizeof(unsigned long)]="";
-                          if(tb->pc>=kernel_start && tb->pc<=kernel_end){
-                          strcpy(modulename,"kernel");
-                          }                             
-                          qemu_log("0x%"PRIx64",0x"TARGET_FMT_lx","TARGET_FMT_lx",%s,"TARGET_FMT_lx","TARGET_FMT_lx,qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL),pid,esp,modulename,env->eip,tb->pc+tb->size-2);
-                          if(funcistraced(env->eip)!=-1){
-                          int i;
-                          for(i=0;funcargv[id][i]!='\0';i++){
-                          switch(funcargv[id][i]){
-                          case 'v':break;
-                          case 'i':qemu_log(","TARGET_FMT_ld,env->regs[argorder[i]]);break;
-                          case 's':
-                          char tmp[100];
-                          cpu_memory_rw_debug(cpu,env->regs[argorder[i]],(uint8_t *)&tmp,sizeof(tmp),0);
-                          qemu_log(",%s",tmp);
-                          break;
-                          case 'o':qemu_log(","TARGET_FMT_lx,env->regs[argorder[i]]);break;
-                          }
-                          }
-                          }
-                          qemu_log("\n");
-                          }else if(tb->type==TB_RET){
-                          qemu_log("0x%"PRIx64",0x"TARGET_FMT_lx","TARGET_FMT_lx"\n",qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL),env->cr[3],env->regs[R_ESP]-sizeof(target_ulong));
-                          }*/
+                        else if(prev_is_ret && strcmp(ld_global.processName,"mychmod")==0){
+                            my_target_ulong retAddr = tb->pc+tb->size-2;
+                            fprintf(stackWrite,MY_TARGET_FMT_lx","MY_TARGET_FMT_lx"\n",retAddrTmp,retAddr);
+                            //if(IndexOf(&retAddrList,retAddr)!=-1){
+                            //if(retAddrTmp-retAddr<=5 && retAddrTmp-retAddr>=-5){
+                            if(retAddr==0xc10efdff || retAddr==0xc162fa4c){
+                                print_return(stackWrite,env->regs[R_EAX],retAddr,ld_global);
+                            }
+                        }
                     }                    
 
                     switch (next_tb & TB_EXIT_MASK) {
