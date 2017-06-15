@@ -677,7 +677,7 @@ static void print_parameter(FILE *fp,CPUArchState *env,CPUState *cpu,int funcInd
 }
 
 static inline void print_return(FILE *fp,my_target_ulong eax,my_target_ulong retAddr,logData ld){
-    fprintf(fp,"-------------- %c,%s,"TARGET_FMT_lx","TARGET_FMT_lx",%d,%d,"TARGET_FMT_lx"\n",'A',ld.processName,(long unsigned int)retAddr,(long unsigned int)eax,(int)ld.pid,ld.tid,ld.esp);
+    fprintf(fp,"%c,%s,"TARGET_FMT_lx","TARGET_FMT_lx",%d,%d,"TARGET_FMT_lx"\n",'A',ld.processName,(long unsigned int)retAddr,(long unsigned int)eax,(int)ld.pid,ld.tid,ld.esp);
 }
 
 
@@ -957,10 +957,12 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
                      *   400551:   e8 e1 ff ff ff          callq  400537 <b>
                      *   400556:   bf ff 05 40 00          mov    $0x4005ff,%edi
                     */
-                    appendList(&retAddrList,&ld.curAddr+2); 
-                    retAddrTmp = ld.curAddr+2;
 
                     if(is_record_process !=-1){
+                        my_target_ulong retAddr = ld.curAddr+2;
+                        appendList(&retAddrList,&retAddr); 
+                        retAddrTmp = ld.curAddr+2;
+
                         print_log_to_file(ld);
                         //fprintf(stackWrite,"%d,"TARGET_FMT_lx"\n",ld.tid,ld.goAddr);
                         int funcIndex = funcistraced(ld.goAddr);
@@ -985,8 +987,6 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
         if(is_record_process !=-1){
             if(IndexOf(&retAddrList,env->eip)!=-1){
                 print_return(stackWrite,env->regs[R_EAX],env->eip,ld);
-
-
             }
         }
         return ;
