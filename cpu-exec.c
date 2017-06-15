@@ -677,7 +677,7 @@ static void print_parameter(FILE *fp,CPUArchState *env,CPUState *cpu,int funcInd
 }
 
 static inline void print_return(FILE *fp,my_target_ulong eax,my_target_ulong retAddr,logData ld){
-    fprintf(fp,"%c,%s,"TARGET_FMT_lx","TARGET_FMT_lx",%d,%d,"TARGET_FMT_lx"\n",'A',ld.processName,retAddr,eax,(int)ld.pid,ld.tid,ld.esp);
+    fprintf(fp,"-------------- %c,%s,"TARGET_FMT_lx","TARGET_FMT_lx",%d,%d,"TARGET_FMT_lx"\n",'A',ld.processName,(long unsigned int)retAddr,(long unsigned int)eax,(int)ld.pid,ld.tid,ld.esp);
 }
 
 
@@ -947,37 +947,49 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
     int is_record_process = -1;
     is_record_process = IndexOfStr(&program_list,ld.processName);
     //only record specific function 
-    switch(only_record_specific_func){
-        case RECORD_SPEC_FUNC :
-            if(funcistraced(ld.goAddr)!=-1){
+    if(tb->type==TB_CALL){
+        switch(only_record_specific_func){
+            case RECORD_SPEC_FUNC :
+                if(funcistraced(ld.goAddr)!=-1){
 
-                /*   in order to record the return value, we need record current addr + 2
-                 *   eg: curaddr = 0x400554, return address is 0x400556
-                 *   400551:   e8 e1 ff ff ff          callq  400537 <b>
-                 *   400556:   bf ff 05 40 00          mov    $0x4005ff,%edi
-                */
-                //appendList(&retAddrList,&ld.curAddr+2); 
-                retAddrTmp = ld.curAddr+2;
+                    /*   in order to record the return value, we need record current addr + 2
+                     *   eg: curaddr = 0x400554, return address is 0x400556
+                     *   400551:   e8 e1 ff ff ff          callq  400537 <b>
+                     *   400556:   bf ff 05 40 00          mov    $0x4005ff,%edi
+                    */
+                    appendList(&retAddrList,&ld.curAddr+2); 
+                    retAddrTmp = ld.curAddr+2;
 
-                if(is_record_process !=-1){
-                    print_log_to_file(ld);
-                    //fprintf(stackWrite,"%d,"TARGET_FMT_lx"\n",ld.tid,ld.goAddr);
-                    int funcIndex = funcistraced(ld.goAddr);
-                    //print_parameter(stackWrite,cpu,env->regs[funcParaPos[funcIndex]],funcIndex);
-                    fprintf(stackWrite,TARGET_FMT_lx"\n",ld.goAddr);
-                    print_parameter(stackWrite,env,cpu,funcIndex);
-                    fprintf(stackWrite,"********************************************\n");
+                    if(is_record_process !=-1){
+                        print_log_to_file(ld);
+                        //fprintf(stackWrite,"%d,"TARGET_FMT_lx"\n",ld.tid,ld.goAddr);
+                        int funcIndex = funcistraced(ld.goAddr);
+                        //print_parameter(stackWrite,cpu,env->regs[funcParaPos[funcIndex]],funcIndex);
+                        fprintf(stackWrite,TARGET_FMT_lx"\n",ld.goAddr);
+                        print_parameter(stackWrite,env,cpu,funcIndex);
+                        fprintf(stackWrite,"********************************************\n");
+                    }
+                    
                 }
+                return ;
+            case RECORD_ALL_FUNC_WITHOUT_PARA:
+                print_log_to_file(ld);
+                return;
+            case RECORD_ALL_FUNC_WITH_PARA:
+                print_log_to_file(ld);
+                print_all_regs_para(env);
+                return;
+        }
+    }
+    else{
+        if(is_record_process !=-1){
+            if(IndexOf(&retAddrList,env->eip)!=-1){
+                print_return(stackWrite,env->regs[R_EAX],env->eip,ld);
+
+
             }
-//            if(ld.goAddr == )
-            return ;
-        case RECORD_ALL_FUNC_WITHOUT_PARA:
-            print_log_to_file(ld);
-            return;
-        case RECORD_ALL_FUNC_WITH_PARA:
-            print_log_to_file(ld);
-            print_all_regs_para(env);
-            return;
+        }
+        return ;
     }
 
 
@@ -1213,6 +1225,7 @@ int cpu_exec(CPUState *cpu)
                                 prev_is_ret = false;
                             }
                         }
+                        /*
                         else if(prev_is_ret && strcmp(ld_global.processName,"mychmod")==0){
                             my_target_ulong retAddr = tb->pc+tb->size-2;
                             fprintf(stackWrite,MY_TARGET_FMT_lx","MY_TARGET_FMT_lx"\n",retAddrTmp,retAddr);
@@ -1222,6 +1235,7 @@ int cpu_exec(CPUState *cpu)
                                 print_return(stackWrite,env->regs[R_EAX],retAddr,ld_global);
                             }
                         }
+                        */
                     }                    
 
                     switch (next_tb & TB_EXIT_MASK) {
