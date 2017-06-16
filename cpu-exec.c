@@ -461,7 +461,7 @@ static int print_file_inode_by_chmodfunc(FILE * fp,CPUState *cpu,my_target_ulong
     cpu_memory_rw_debug(cpu,d_inode+i_uid_offset,(uint8_t *)&i_uid,sizeof(i_uid),0);
     cpu_memory_rw_debug(cpu,d_inode+i_gid_offset,(uint8_t *)&i_gid,sizeof(i_gid),0);
     cpu_memory_rw_debug(cpu,d_inode+i_ino_offset,(uint8_t *)&i_ino,sizeof(i_ino),0);
-    fprintf(fp,"file inode:%d, mode:%o, uid:%d, gid:%d\n",(int)i_ino,(short)i_mode,(int)i_uid,(int)i_gid);
+    fprintf(fp,"file inode:%d, mode:%o, uid:%d, gid:%d||",(int)i_ino,(short)i_mode,(int)i_uid,(int)i_gid);
     return 0;
 }
 
@@ -480,7 +480,7 @@ static int print_cred_by_task_struct(FILE * fp,CPUState *cpu,my_target_ulong tas
     cpu_memory_rw_debug(cpu,task+cred_offset,(uint8_t *)&cred,sizeof(cred),0);
     cpu_memory_rw_debug(cpu,cred+uid_offset,(uint8_t *)&uid,sizeof(uid),0);
     cpu_memory_rw_debug(cpu,cred+gid_offset,(uint8_t *)&gid,sizeof(gid),0);
-    fprintf(fp,"task struct cred info, uid:%d, gid:%d\n",(int)uid,(int)gid);
+    fprintf(fp,"task struct cred info, uid:%d, gid:%d||",(int)uid,(int)gid);
     return 0;
 }
 
@@ -643,12 +643,12 @@ static int funcistraced(my_target_ulong target)
 static inline void printStrParameter(FILE * fp, CPUState *cpu,my_target_ulong reg){
     char para[50]={0};
     cpu_memory_rw_debug(cpu,reg,(uint8_t *)&para,sizeof(para),0);
-    fprintf(fp,"%s,",para);
+    fprintf(fp,"%s||",para);
     return;
 }
 
 static inline void printIntParameter(FILE * fp,my_target_ulong reg){
-    fprintf(fp,MY_TARGET_FMT_lx",",reg);
+    fprintf(fp,MY_TARGET_FMT_lx"||",reg);
 }
 
 static void print_parameter(FILE *fp,CPUArchState *env,CPUState *cpu,int funcIndex){
@@ -670,7 +670,6 @@ static void print_parameter(FILE *fp,CPUArchState *env,CPUState *cpu,int funcInd
                 break;
             case PARA_INODE :
                 print_file_inode_by_chmodfunc(stackWrite,cpu,env->regs[R_EDI]);
-
         }
     }
     fprintf(fp,"\n");
@@ -967,9 +966,8 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
                         //fprintf(stackWrite,"%d,"TARGET_FMT_lx"\n",ld.tid,ld.goAddr);
                         int funcIndex = funcistraced(ld.goAddr);
                         //print_parameter(stackWrite,cpu,env->regs[funcParaPos[funcIndex]],funcIndex);
-                        fprintf(stackWrite,TARGET_FMT_lx"\n",ld.goAddr);
+                        fprintf(stackWrite,TARGET_FMT_lx"-->"TARGET_FMT_lx",",ld.curAddr,ld.goAddr);
                         print_parameter(stackWrite,env,cpu,funcIndex);
-                        fprintf(stackWrite,"********************************************\n");
                     }
                     
                 }
