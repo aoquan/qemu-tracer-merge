@@ -437,26 +437,13 @@ static struct mySocket printSocket(FILE * fp, CPUState *cpu,my_target_ulong rsi)
     }
 }
 
-
-/*
-    record mode, uid, gid of an file when chmod
-*/
-
-static int print_file_inode_by_chmodfunc(FILE * fp,CPUState *cpu,my_target_ulong dentry){
-/*  lubuntu64
-*/
-    int d_inode_offset = 0x30;
-
-/* busybox
-    int d_inode_offset = 0x20;
-*/
+static int print_inode(FILE * fp,CPUState *cpu,my_target_ulong d_inode){
     int i_mode_offset = 0x0;
     int i_uid_offset = 0x4;
     int i_gid_offset = 0x8;
     int i_ino_offset = 0x40;
 
-    my_target_ulong d_inode,i_mode,i_uid,i_gid,i_ino;
-    cpu_memory_rw_debug(cpu,dentry+d_inode_offset,(uint8_t *)&d_inode,sizeof(d_inode),0);
+    my_target_ulong i_mode,i_uid,i_gid,i_ino;
     cpu_memory_rw_debug(cpu,d_inode+i_mode_offset,(uint8_t *)&i_mode,sizeof(i_mode),0);
     cpu_memory_rw_debug(cpu,d_inode+i_uid_offset,(uint8_t *)&i_uid,sizeof(i_uid),0);
     cpu_memory_rw_debug(cpu,d_inode+i_gid_offset,(uint8_t *)&i_gid,sizeof(i_gid),0);
@@ -464,6 +451,29 @@ static int print_file_inode_by_chmodfunc(FILE * fp,CPUState *cpu,my_target_ulong
     fprintf(fp,"file inode:%d, mode:%o, uid:%d, gid:%d||",(int)i_ino,(short)i_mode,(int)i_uid,(int)i_gid);
     return 0;
 }
+/*
+    record mode, uid, gid of an file when chmod
+*/
+
+static int print_file_inode_by_dentry(FILE * fp,CPUState *cpu,my_target_ulong dentry){
+/*  lubuntu64
+*/
+    int d_inode_offset;
+#ifdef isLubuntu64
+    d_inode_offset = 0x30;
+#endif
+
+/* busybox
+    int d_inode_offset = 0x20;
+*/
+#ifdef isBusybox
+    d_inode_offset = 0x20;
+#endif
+    my_target_ulong d_inode;
+    cpu_memory_rw_debug(cpu,dentry+d_inode_offset,(uint8_t *)&d_inode,sizeof(d_inode),0);
+    print_inode(fp,cpu,d_inode);
+}
+
 
 static int print_cred_by_task_struct(FILE * fp,CPUState *cpu,my_target_ulong task){
 /*  lubuntu64
@@ -669,7 +679,11 @@ static void print_parameter(FILE *fp,CPUArchState *env,CPUState *cpu,int funcInd
                 print_cred_by_task_struct(stackWrite,cpu,task);
                 break;
             case PARA_INODE :
-                print_file_inode_by_chmodfunc(stackWrite,cpu,env->regs[R_EDI]);
+                print_inode(stackWrite,cpu,env->regs[R_EDI]);
+                break;
+            case PARA_DENTRY :
+                print_file_inode_by_dentry(stackWrite,cpu,env->regs[R_EDI]);
+                break;
         }
     }
     fprintf(fp,"\n");
