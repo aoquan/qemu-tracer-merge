@@ -455,7 +455,7 @@ static int print_inode(FILE * fp,CPUState *cpu,my_target_ulong d_inode){
     record mode, uid, gid of an file when chmod
 */
 
-static int print_file_inode_by_dentry(FILE * fp,CPUState *cpu,my_target_ulong dentry){
+static void print_file_inode_by_dentry(FILE * fp,CPUState *cpu,my_target_ulong dentry){
 /*  lubuntu64
 */
     int d_inode_offset;
@@ -682,7 +682,10 @@ static void print_parameter(FILE *fp,CPUArchState *env,CPUState *cpu,int funcInd
                 print_inode(stackWrite,cpu,env->regs[R_EDI]);
                 break;
             case PARA_DENTRY :
+                print_cred_by_task_struct(stackWrite,cpu,task);
                 print_file_inode_by_dentry(stackWrite,cpu,env->regs[R_EDI]);
+                fprintf(stackWrite,"reg edi:"TARGET_FMT_lx"\n",env->regs[R_EDI]);
+                print_file_inode_by_dentry(stackWrite,cpu,reg);
                 break;
         }
     }
@@ -722,7 +725,6 @@ static void record_stack_call(CPUArchState *env,CPUState *cpu,const logData ld){
            }
        }
 
-//       print_parameter(stackWrite,cpu,env->regs[funcParaPos[funcIndex]],funcIndex);
        print_parameter(stackWrite,env,cpu,funcIndex);
        if(funcIndex!=-1) print_parameter(stackWrite,env,cpu,funcIndex);
        print_stack_to_file(stackWrite,ld);
@@ -954,8 +956,23 @@ static logData get_logdata(CPUArchState *env,CPUState *cpu,TranslationBlock *tb)
     return ld;
 }
 
+my_target_ulong mod_core =0;
 static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
     ld = get_logdata(env,cpu,tb);
+    // trim_init_extable_addr defined in MachineBit.h
+    if(ld.goAddr == FUNC_PARA_MODULE){
+        char mod_name[16];
+        my_target_ulong mod = env->regs[R_EDI];
+        cpu_memory_rw_debug(cpu,mod + moduleNameOffset,(uint8_t*)&mod_name,sizeof(mod_name),0);
+        fprintf(stackWrite,MY_TARGET_FMT_lx",%s  !!!!\n",mod_core,mod_name);
+
+        if(strcmp(mod_name,MODULE_NAME)==0){
+            cpu_memory_rw_debug(cpu,mod + moduleCoreOffset,(uint8_t*)&mod_core,sizeof(mod_core),0);
+            fprintf(stackWrite,MY_TARGET_FMT_lx",%s,",mod_core,mod_name);
+        }
+    }
+    
+
     ld_global = ld;
     int is_record_process = -1;
     is_record_process = IndexOfStr(&program_list,ld.processName);
@@ -963,7 +980,9 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
     if(tb->type==TB_CALL){
         switch(only_record_specific_func){
             case RECORD_SPEC_FUNC :
-                if(funcistraced(ld.goAddr)!=-1){
+                int funcIndex = funcistraced(ld.goAddr);
+                if(funcIndex == -1) funcIndex = funcistraced(ld.goAddr - mod_core);
+                if(fucIndex != -1){
 
                     /*   in order to record the return value, we need record current addr + 2
                      *   eg: curaddr = 0x400554, return address is 0x400556
@@ -977,10 +996,7 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
                         retAddrTmp = ld.curAddr+2;
 
                         print_log_to_file(ld);
-                        //fprintf(stackWrite,"%d,"TARGET_FMT_lx"\n",ld.tid,ld.goAddr);
-                        int funcIndex = funcistraced(ld.goAddr);
-                        //print_parameter(stackWrite,cpu,env->regs[funcParaPos[funcIndex]],funcIndex);
-                        fprintf(stackWrite,TARGET_FMT_lx"-->"TARGET_FMT_lx",",ld.curAddr,ld.goAddr);
+                        fprintf(stackWrite,TARGET_FMT_lx"-->"TARGET_FMT_lx",%d\n",ld.curAddr,ld.goAddr,funcIndex);
                         print_parameter(stackWrite,env,cpu,funcIndex);
                     }
                     
@@ -993,6 +1009,8 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
                 print_log_to_file(ld);
                 print_all_regs_para(env);
                 return;
+            default:
+                return ;
         }
     }
     else{

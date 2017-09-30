@@ -199,6 +199,9 @@ static void map_reg(void){
            else if(strcmp(trace_func[i].para[j].type,"inode")==0){
                trace_func[i].para[j].i_type = PARA_INODE;
            }
+           else if(strcmp(trace_func[i].para[j].type,"dentry")==0){
+               trace_func[i].para[j].i_type = PARA_DENTRY;
+           }
        }
    }
 }
