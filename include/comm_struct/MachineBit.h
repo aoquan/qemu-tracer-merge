@@ -1,10 +1,10 @@
 #define MACH_BIT
 #include"stdint.h"
-#define osBit32 1
-#define isBusybox 1
+#define osBit32 0
+#define isBusybox 0
 #define isLubuntu32 0
-#define isLubuntu64 0
-#define QEMULOG 1 //whether record the functions call log
+#define isLubuntu64 1
+#define QEMULOG 0 //whether record the functions call log
 #if osBit32 
 typedef uint32_t my_target_ulong;
 #define kernelMinAddr 0xc0000000           //if an address less than kernelMinAddr, it is in user space, otherwise in kernel space 
@@ -35,6 +35,11 @@ typedef uint64_t my_target_ulong;
 #define realParentOffset 0x448
 #define parentOffset 0x448
 #define tgidOffset 0x43c
+#define moduleNameOffset 0x18
+#define moduleCoreOffset 0x1c8
+//do_init_module, linux-4.2.0
+#define FUNC_PARA_MODULE 0xffffffff817e66a0
+#define MODULE_NAME "overlay"
 #endif
 
 #if isBusybox
@@ -42,6 +47,11 @@ typedef uint64_t my_target_ulong;
 #define pidOffset 0x1f4 //busybox 
 #define tgidOffset 0x1f8 //busybox 
 #define realParentOffset 0x1fc //busybox
+#define moduleNameOffset 0xc
+#define moduleCoreOffset 0xc4
+//trim_init_extable_addr, linux-3.5.4
+#define FUNC_PARA_MODULE 0xc1025170
+#define MODULE_NAME "offset"
 #endif 
 
 #define PARA_INT 0
@@ -49,6 +59,8 @@ typedef uint64_t my_target_ulong;
 #define PARA_SOCKET 2 
 #define PARA_CRED 3 
 #define PARA_INODE 4
+#define PARA_DENTRY 5
+
 
 #define RECORD_FUNC_NO -1 //do not use this condition 
 #define RECORD_SPEC_FUNC 1
