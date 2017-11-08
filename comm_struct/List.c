@@ -289,6 +289,9 @@ int IndexOfStr(const List *head,char * element){
         if(strcmp((char *)cur->data,element)==0){
             return count;
         }
+        else{
+            if(strstr(element,(char *)cur->data)) return count;
+        }
         cur=cur->next;
         count ++;
     }
