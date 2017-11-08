@@ -441,14 +441,24 @@ static int print_inode(FILE * fp,CPUState *cpu,my_target_ulong d_inode){
     int i_mode_offset = 0x0;
     int i_uid_offset = 0x4;
     int i_gid_offset = 0x8;
-    int i_ino_offset = 0x40;
+    int i_ino_offset;
+
+#if isLubuntu64
+    i_ino_offset = 0x40;
+#endif
+
+#if isBusybox
+    i_ino_offset = 0x28;
+#endif
 
     my_target_ulong i_mode,i_uid,i_gid,i_ino;
+//    target_ulong i_ino;
     cpu_memory_rw_debug(cpu,d_inode+i_mode_offset,(uint8_t *)&i_mode,sizeof(i_mode),0);
     cpu_memory_rw_debug(cpu,d_inode+i_uid_offset,(uint8_t *)&i_uid,sizeof(i_uid),0);
     cpu_memory_rw_debug(cpu,d_inode+i_gid_offset,(uint8_t *)&i_gid,sizeof(i_gid),0);
     cpu_memory_rw_debug(cpu,d_inode+i_ino_offset,(uint8_t *)&i_ino,sizeof(i_ino),0);
-    fprintf(fp,"file inode:%d, mode:%o, uid:%d, gid:%d||",(int)i_ino,(short)i_mode,(int)i_uid,(int)i_gid);
+//    fprintf(fp,"file inode, i_ino:"TARGET_FMT_ld", mode:%o, uid:%x, gid:%x||",i_ino,(short)i_mode,(int)i_uid,(int)i_gid);
+    fprintf(fp,"file inode, i_ino:%d, mode:%o, uid:%x, gid:%x||",(int)i_ino,(short)i_mode,(int)i_uid,(int)i_gid);
     return 0;
 }
 /*
@@ -456,17 +466,14 @@ static int print_inode(FILE * fp,CPUState *cpu,my_target_ulong d_inode){
 */
 
 static void print_file_inode_by_dentry(FILE * fp,CPUState *cpu,my_target_ulong dentry){
+    int d_inode_offset;
 /*  lubuntu64
 */
-    int d_inode_offset;
-#ifdef isLubuntu64
+#if isLubuntu64
     d_inode_offset = 0x30;
 #endif
 
-/* busybox
-    int d_inode_offset = 0x20;
-*/
-#ifdef isBusybox
+#if isBusybox
     d_inode_offset = 0x20;
 #endif
     my_target_ulong d_inode;
@@ -476,13 +483,15 @@ static void print_file_inode_by_dentry(FILE * fp,CPUState *cpu,my_target_ulong d
 
 
 static int print_cred_by_task_struct(FILE * fp,CPUState *cpu,my_target_ulong task){
-/*  lubuntu64
-*/
-    int cred_offset = 0x5d8;
-/*
-    //busybox
-    int cred_offset = 0x2c8;
-*/
+int cred_offset;
+#if isLubuntu64
+    cred_offset = 0x5d8;
+#endif
+
+#if isBusybox
+    cred_offset = 0x2c8;
+#endif
+
     int uid_offset = 0x4;
     int gid_offset = 0x8;
 
@@ -583,9 +592,9 @@ extern Trace_func trace_func[];
 
 
 extern int funccount;
-const int argorder[6]={R_EDI,R_ESI,R_EDX,R_ECX,8,9};
+//const int argorder[6]={R_EDI,R_ESI,R_EDX,R_ECX,8,9};
 extern target_ulong got;
-extern target_ulong ptDynamic;
+//extern target_ulong ptDynamic;
 extern bool print_funcstack;
 extern List  program_list;
 extern my_target_ulong  kernel_addr_begin,kernel_addr_end,user_addr_begin,user_addr_end;
@@ -679,16 +688,15 @@ static void print_parameter(FILE *fp,CPUArchState *env,CPUState *cpu,int funcInd
                 print_cred_by_task_struct(stackWrite,cpu,task);
                 break;
             case PARA_INODE :
-                print_inode(stackWrite,cpu,env->regs[R_EDI]);
+                print_inode(stackWrite,cpu,reg);
                 break;
             case PARA_DENTRY :
                 print_cred_by_task_struct(stackWrite,cpu,task);
-                print_file_inode_by_dentry(stackWrite,cpu,env->regs[R_EDI]);
-                fprintf(stackWrite,"reg edi:"TARGET_FMT_lx"\n",env->regs[R_EDI]);
                 print_file_inode_by_dentry(stackWrite,cpu,reg);
                 break;
         }
     }
+    fprintf(fp,"\n");
     fprintf(fp,"\n");
 }
 
@@ -968,7 +976,7 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
 
         if(strcmp(mod_name,MODULE_NAME)==0){
             cpu_memory_rw_debug(cpu,mod + moduleCoreOffset,(uint8_t*)&mod_core,sizeof(mod_core),0);
-            fprintf(stackWrite,MY_TARGET_FMT_lx",%s,",mod_core,mod_name);
+            fprintf(stackWrite,MY_TARGET_FMT_lx",%s",mod_core,mod_name);
         }
     }
     
@@ -979,10 +987,11 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
     //only record specific function 
     if(tb->type==TB_CALL){
         switch(only_record_specific_func){
-            case RECORD_SPEC_FUNC :
+            case RECORD_SPEC_FUNC:
+                {
                 int funcIndex = funcistraced(ld.goAddr);
                 if(funcIndex == -1) funcIndex = funcistraced(ld.goAddr - mod_core);
-                if(fucIndex != -1){
+                if(funcIndex != -1){
 
                     /*   in order to record the return value, we need record current addr + 2
                      *   eg: curaddr = 0x400554, return address is 0x400556
@@ -1002,6 +1011,7 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
                     
                 }
                 return ;
+                }
             case RECORD_ALL_FUNC_WITHOUT_PARA:
                 print_log_to_file(ld);
                 return;
@@ -1015,8 +1025,11 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
     }
     else{
         if(is_record_process !=-1){
-            if(IndexOf(&retAddrList,env->eip)!=-1){
+            int ret_index = IndexOf(&retAddrList,env->eip);
+            if(ret_index != -1){
                 print_return(stackWrite,env->regs[R_EAX],env->eip,ld);
+                my_target_ulong tmp;
+                deleteList(&retAddrList,ret_index,&tmp);
             }
         }
         return ;
