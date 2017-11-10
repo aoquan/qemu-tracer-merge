@@ -451,14 +451,14 @@ static int print_inode(FILE * fp,CPUState *cpu,my_target_ulong d_inode){
     i_ino_offset = 0x28;
 #endif
 
-    my_target_ulong i_mode,i_uid,i_gid;
-    target_ulong i_ino;
+    my_target_ulong i_mode,i_uid,i_gid,i_ino;
+//    target_ulong i_ino;
     cpu_memory_rw_debug(cpu,d_inode+i_mode_offset,(uint8_t *)&i_mode,sizeof(i_mode),0);
     cpu_memory_rw_debug(cpu,d_inode+i_uid_offset,(uint8_t *)&i_uid,sizeof(i_uid),0);
     cpu_memory_rw_debug(cpu,d_inode+i_gid_offset,(uint8_t *)&i_gid,sizeof(i_gid),0);
     cpu_memory_rw_debug(cpu,d_inode+i_ino_offset,(uint8_t *)&i_ino,sizeof(i_ino),0);
-//    fprintf(fp,"file inode, i_ino:%x, mode:%o, uid:%x, gid:%x||",i_ino,(short)i_mode,(int)i_uid,(int)i_gid);
-    fprintf(fp,"file inode, i_ino:"TARGET_FMT_ld", mode:%o, uid:%x, gid:%x||",i_ino,(short)i_mode,(int)i_uid,(int)i_gid);
+//    fprintf(fp,"file inode, i_ino:"TARGET_FMT_ld", mode:%o, uid:%x, gid:%x||",i_ino,(short)i_mode,(int)i_uid,(int)i_gid);
+    fprintf(fp,"file inode, i_ino:%d, mode:%o, uid:%x, gid:%x||",(int)i_ino,(short)i_mode,(int)i_uid,(int)i_gid);
     return 0;
 }
 /*
@@ -592,9 +592,9 @@ extern Trace_func trace_func[];
 
 
 extern int funccount;
-const int argorder[6]={R_EDI,R_ESI,R_EDX,R_ECX,8,9};
+//const int argorder[6]={R_EDI,R_ESI,R_EDX,R_ECX,8,9};
 extern target_ulong got;
-extern target_ulong ptDynamic;
+//extern target_ulong ptDynamic;
 extern bool print_funcstack;
 extern List  program_list;
 extern my_target_ulong  kernel_addr_begin,kernel_addr_end,user_addr_begin,user_addr_end;
@@ -697,11 +697,11 @@ static void print_parameter(FILE *fp,CPUArchState *env,CPUState *cpu,int funcInd
         }
     }
     fprintf(fp,"\n");
-    fprintf(fp,"\n");
 }
 
-static inline void print_return(FILE *fp,my_target_ulong eax,my_target_ulong retAddr,logData ld){
-    fprintf(fp,"%c,%s,"TARGET_FMT_lx","TARGET_FMT_lx",%d,%d,"TARGET_FMT_lx"\n",'A',ld.processName,(long unsigned int)retAddr,(long unsigned int)eax,(int)ld.pid,ld.tid,ld.esp);
+//static inline void print_return(FILE *fp,my_target_ulong eax,my_target_ulong retAddr,logData ld){
+static inline void print_return(FILE *fp,my_target_ulong eax,logData ld){
+    fprintf(fp,"%c,%s,"TARGET_FMT_lx","TARGET_FMT_lx",%d,%d,"TARGET_FMT_lx"||"TARGET_FMT_lx"\n",ld.type,ld.processName,ld.curAddr,ld.goAddr,(int)ld.pid,ld.tid,ld.esp,(long unsigned int)eax);
 }
 
 
@@ -1005,7 +1005,8 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
                         retAddrTmp = ld.curAddr+2;
 
                         print_log_to_file(ld);
-                        fprintf(stackWrite,TARGET_FMT_lx"-->"TARGET_FMT_lx",%d\n",ld.curAddr,ld.goAddr,funcIndex);
+//                        fprintf(stackWrite,TARGET_FMT_lx"-->"TARGET_FMT_lx"||",ld.curAddr,ld.goAddr);
+                        fprintf(stackWrite,"%c,%s,"TARGET_FMT_lx","TARGET_FMT_lx",%d,%d,"TARGET_FMT_lx"||",ld.type,ld.processName,ld.curAddr,ld.goAddr,(int)ld.pid,ld.tid,ld.esp);
                         print_parameter(stackWrite,env,cpu,funcIndex);
                     }
                     
@@ -1025,8 +1026,11 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
     }
     else{
         if(is_record_process !=-1){
-            if(IndexOf(&retAddrList,env->eip)!=-1){
-                print_return(stackWrite,env->regs[R_EAX],env->eip,ld);
+            int ret_index = IndexOf(&retAddrList,env->eip);
+            if(ret_index != -1){
+                print_return(stackWrite,env->regs[R_EAX],ld);
+                my_target_ulong tmp;
+                deleteList(&retAddrList,ret_index,&tmp);
             }
         }
         return ;
