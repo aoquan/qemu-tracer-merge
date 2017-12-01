@@ -630,10 +630,14 @@ static void get_write_file(void){
     }
     pthread_mutex_unlock(&singleton_lock);
 }
+struct ret_struct{
+    my_target_ulong address;
+    int ret_type;
+};
 
 static void init_some_list(void){
     if(!is_list_init){
-        initList(&retAddrList,sizeof(my_target_ulong));
+        initList(&retAddrList,sizeof(ret_struct));
         is_list_init = true;
     }
 }
@@ -670,38 +674,45 @@ static inline void printIntParameter(FILE * fp,my_target_ulong reg){
     fprintf(fp,MY_TARGET_FMT_lx"||",reg);
 }
 
+static void print_reg(FILE *fp,CPUState *cpu, my_target_ulong reg, int i_type){
+    switch(i_type){
+        case PARA_SOCKET :
+            printSocket(stackWrite,cpu,reg);
+            break;
+        case PARA_STRING :
+            printStrParameter(stackWrite,cpu,reg);
+            break;
+        case PARA_INT :
+            printIntParameter(stackWrite,reg);
+            break;
+        case PARA_CRED :
+            print_cred_by_task_struct(stackWrite,cpu,task);
+            break;
+        case PARA_INODE :
+            print_inode(stackWrite,cpu,reg);
+            break;
+        case PARA_DENTRY :
+            print_cred_by_task_struct(stackWrite,cpu,task);
+            print_file_inode_by_dentry(stackWrite,cpu,reg);
+            break;
+    }
+}
+
 static void print_parameter(FILE *fp,CPUArchState *env,CPUState *cpu,int funcIndex){
     int i;
-    for(i=0;i<trace_func[funcIndex].para_num;i++){
+    for(i=1;i<trace_func[funcIndex].para_num;i++){
         my_target_ulong reg  =  env->regs[trace_func[funcIndex].para[i].reg];
-        switch(trace_func[funcIndex].para[i].i_type){
-            case PARA_SOCKET :
-                printSocket(stackWrite,cpu,reg);
-                break;
-            case PARA_STRING :
-                printStrParameter(stackWrite,cpu,reg);
-                break;
-            case PARA_INT :
-                printIntParameter(stackWrite,reg);
-                break;
-            case PARA_CRED :
-                print_cred_by_task_struct(stackWrite,cpu,task);
-                break;
-            case PARA_INODE :
-                print_inode(stackWrite,cpu,reg);
-                break;
-            case PARA_DENTRY :
-                print_cred_by_task_struct(stackWrite,cpu,task);
-                print_file_inode_by_dentry(stackWrite,cpu,reg);
-                break;
-        }
+        print_reg(fp, cpu, reg, trace_func[funcIndex].para[i].i_type);
     }
     fprintf(fp,"\n");
 }
 
-//static inline void print_return(FILE *fp,my_target_ulong eax,my_target_ulong retAddr,logData ld){
-static inline void print_return(FILE *fp,my_target_ulong eax,logData ld){
-    fprintf(fp,"%c,%s,"TARGET_FMT_lx","TARGET_FMT_lx",%d,%d,"TARGET_FMT_lx"||"TARGET_FMT_lx"\n",ld.type,ld.processName,ld.curAddr,ld.goAddr,(int)ld.pid,ld.tid,ld.esp,(long unsigned int)eax);
+static void print_return(FILE *fp,my_target_ulong eax,logData ld, int index){
+//    fprintf(fp,"%c,%s,"TARGET_FMT_lx","TARGET_FMT_lx",%d,%d,"TARGET_FMT_lx"||"TARGET_FMT_lx"\n",ld.type,ld.processName,ld.curAddr,ld.goAddr,(int)ld.pid,ld.tid,ld.esp,(long unsigned int)eax);
+    
+    fprintf(fp,"%c,%s,"TARGET_FMT_lx","TARGET_FMT_lx",%d,%d,"TARGET_FMT_lx,ld.type,ld.processName,ld.curAddr,ld.goAddr,(int)ld.pid,ld.tid,ld.esp);
+    print_reg(fp, cpu, reg, trace_func[funcIndex].para[i].i_type);
+    
 }
 
 
@@ -1000,8 +1011,11 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
                     */
 
                     if(is_record_process !=-1){
-                        my_target_ulong retAddr = ld.curAddr+2;
-                        appendList(&retAddrList,&retAddr); 
+//                        my_target_ulong retAddr = ld.curAddr+2;
+                        ret_struct ret_tmp;
+                        ret_tmp.address = ld.curAddr+2;
+                        ret_tmp.ret_type = trace_func[funcIndex].ret.i_type;
+                        appendList(&retAddrList,&ret_tmp); 
                         retAddrTmp = ld.curAddr+2;
 
                         print_log_to_file(ld);
@@ -1028,7 +1042,7 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
         if(is_record_process !=-1){
             int ret_index = IndexOf(&retAddrList,env->eip);
             if(ret_index != -1){
-                print_return(stackWrite,env->regs[R_EAX],ld);
+                print_return(stackWrite,env->regs[R_EAX],ld,ret_index);
                 my_target_ulong tmp;
                 deleteList(&retAddrList,ret_index,&tmp);
             }

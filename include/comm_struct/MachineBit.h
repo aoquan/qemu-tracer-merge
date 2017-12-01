@@ -80,6 +80,7 @@ typedef struct{
 typedef struct{
     my_target_ulong funcaddr;
     Func_para para[PARAM_MAX];
+    Func_para ret;
     int para_num;
 }Trace_func;
 uint64_t hex2int(char s[]);
