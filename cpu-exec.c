@@ -598,7 +598,7 @@ extern target_ulong got;
 extern bool print_funcstack;
 extern List  program_list;
 extern my_target_ulong  kernel_addr_begin,kernel_addr_end,user_addr_begin,user_addr_end;
-extern int is_record_kernel,is_record_user,only_record_specific_func;
+extern int is_record_kernel,is_record_user,trace_type;
 
 bool output=false;
 ////////////////////////////////////////////////////
@@ -637,7 +637,7 @@ struct ret_struct{
 
 static void init_some_list(void){
     if(!is_list_init){
-        initList(&retAddrList,sizeof(ret_struct));
+        initList(&retAddrList,sizeof(struct ret_struct));
         is_list_init = true;
     }
 }
@@ -707,14 +707,17 @@ static void print_parameter(FILE *fp,CPUArchState *env,CPUState *cpu,int funcInd
     fprintf(fp,"\n");
 }
 
-static void print_return(FILE *fp,my_target_ulong eax,logData ld, int index){
-//    fprintf(fp,"%c,%s,"TARGET_FMT_lx","TARGET_FMT_lx",%d,%d,"TARGET_FMT_lx"||"TARGET_FMT_lx"\n",ld.type,ld.processName,ld.curAddr,ld.goAddr,(int)ld.pid,ld.tid,ld.esp,(long unsigned int)eax);
-    
-    fprintf(fp,"%c,%s,"TARGET_FMT_lx","TARGET_FMT_lx",%d,%d,"TARGET_FMT_lx,ld.type,ld.processName,ld.curAddr,ld.goAddr,(int)ld.pid,ld.tid,ld.esp);
-    print_reg(fp, cpu, reg, trace_func[funcIndex].para[i].i_type);
-    
+static void print_return(FILE *fp,CPUState * cpu,my_target_ulong eax,logData ld, int index){
+    fprintf(fp,"%c,%s,"TARGET_FMT_lx","TARGET_FMT_lx",%d,%d,"TARGET_FMT_lx"||",ld.type,ld.processName,ld.curAddr,ld.goAddr,(int)ld.pid,ld.tid,ld.esp);
+    print_reg(fp, cpu, eax, trace_func[index].para[0].i_type);
+    fprintf(fp,"\n");
 }
 
+//record return value without param
+static void print_return_without_param(FILE *fp,logData ld){
+    fprintf(fp,"%c,%s,"TARGET_FMT_lx","TARGET_FMT_lx",%d,%d,"TARGET_FMT_lx"||",ld.type,ld.processName,ld.curAddr,ld.goAddr,(int)ld.pid,ld.tid,ld.esp);
+    fprintf(fp,"\n");
+}
 
 static void print_all_regs_para(CPUArchState *env){
 #if osBit32
@@ -997,9 +1000,9 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
     is_record_process = IndexOfStr(&program_list,ld.processName);
     //only record specific function 
     if(tb->type==TB_CALL){
-        switch(only_record_specific_func){
+        switch(trace_type){
             case RECORD_SPEC_FUNC:
-                {
+            {
                 int funcIndex = funcistraced(ld.goAddr);
                 if(funcIndex == -1) funcIndex = funcistraced(ld.goAddr - mod_core);
                 if(funcIndex != -1){
@@ -1012,7 +1015,7 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
 
                     if(is_record_process !=-1){
 //                        my_target_ulong retAddr = ld.curAddr+2;
-                        ret_struct ret_tmp;
+                        struct ret_struct ret_tmp;
                         ret_tmp.address = ld.curAddr+2;
                         ret_tmp.ret_type = trace_func[funcIndex].ret.i_type;
                         appendList(&retAddrList,&ret_tmp); 
@@ -1026,7 +1029,7 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
                     
                 }
                 return ;
-                }
+            }
             case RECORD_ALL_FUNC_WITHOUT_PARA:
                 print_log_to_file(ld);
                 return;
@@ -1034,20 +1037,62 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
                 print_log_to_file(ld);
                 print_all_regs_para(env);
                 return;
+            case RECORD_PROCESS_FUNC_WITHOUT_PARA:
+                {    
+                    if(is_record_process!=-1){
+                        print_log_to_file(ld);
+                    }
+                    return;
+                }
+            case RECORD_PROCESS_FUNC_WITH_PARA:
+                {    
+                    if(is_record_process!=-1){
+                        print_log_to_file(ld);
+                        print_all_regs_para(env);
+                    }
+                    return;
+                }
+            case RECORD_OTHER:
+                break;
             default:
                 return ;
         }
     }
     else{
-        if(is_record_process !=-1){
-            int ret_index = IndexOf(&retAddrList,env->eip);
-            if(ret_index != -1){
-                print_return(stackWrite,env->regs[R_EAX],ld,ret_index);
-                my_target_ulong tmp;
-                deleteList(&retAddrList,ret_index,&tmp);
-            }
+        switch(trace_type){
+            case RECORD_SPEC_FUNC:
+                {
+                    if(is_record_process !=-1){
+                        int ret_index = IndexOf(&retAddrList,env->eip);
+                        if(ret_index != -1){
+                            print_return(stackWrite,cpu,env->regs[R_EAX],ld,ret_index);
+                            my_target_ulong tmp;
+                            deleteList(&retAddrList,ret_index,&tmp);
+                        }
+                    }
+                    return ;
+                }
+            case RECORD_ALL_FUNC_WITHOUT_PARA:
+            case RECORD_ALL_FUNC_WITH_PARA:
+                {
+                    print_return_without_param(stackWrite,ld);
+                    return ;
+                }
+
+
+            case RECORD_PROCESS_FUNC_WITHOUT_PARA:
+            case RECORD_PROCESS_FUNC_WITH_PARA:
+                {
+                    if(is_record_process !=-1){
+                        print_return_without_param(stackWrite,ld);
+                        return ;
+                    }
+                }
+            case RECORD_OTHER:
+                break;
+            default:
+                return;
         }
-        return ;
     }
 
 
@@ -1083,17 +1128,11 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
                     inListFlag = 0; //it can be assigned to any num but -1
                 }
             }
- //           check_priority();
             record_stack(env,cpu,ld,inListFlag);
         }
     }
     return ;
 }
-/*
-void check_priority(CPUArchState *env,CPUState *cpu,my_target_ulong addr){
-    
-}
-*/
 
 
 

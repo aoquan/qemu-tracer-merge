@@ -1,10 +1,10 @@
 #define MACH_BIT
 #include"stdint.h"
-#define osBit32 0
-#define isBusybox 0
-#define isLubuntu32 0
-#define isLubuntu64 1
-#define QEMULOG 0 //whether record the functions call log
+#define osBit32 1
+#define isBusybox 1
+#define isLubuntu32 0 
+#define isLubuntu64 0
+#define QEMULOG 1 //whether record the functions call log
 #if osBit32 
 typedef uint32_t my_target_ulong;
 #define kernelMinAddr 0xc0000000           //if an address less than kernelMinAddr, it is in user space, otherwise in kernel space 
@@ -31,7 +31,7 @@ typedef uint64_t my_target_ulong;
 
 #if isLubuntu64
 #define commOffset 0x5e0 //lubuntu64
-#define pidOffset 0x438 //lubuntu64
+#define pidOffset 0x438 
 #define realParentOffset 0x448
 #define parentOffset 0x448
 #define tgidOffset 0x43c
@@ -44,9 +44,9 @@ typedef uint64_t my_target_ulong;
 
 #if isBusybox
 #define commOffset 0x2cc //busybox 
-#define pidOffset 0x1f4 //busybox 
-#define tgidOffset 0x1f8 //busybox 
-#define realParentOffset 0x1fc //busybox
+#define pidOffset 0x1f4
+#define tgidOffset 0x1f8
+#define realParentOffset 0x1fc
 #define moduleNameOffset 0xc
 #define moduleCoreOffset 0xc4
 //trim_init_extable_addr, linux-3.5.4
@@ -66,6 +66,9 @@ typedef uint64_t my_target_ulong;
 #define RECORD_SPEC_FUNC 1
 #define RECORD_ALL_FUNC_WITHOUT_PARA 2
 #define RECORD_ALL_FUNC_WITH_PARA 3
+#define RECORD_PROCESS_FUNC_WITHOUT_PARA 4 
+#define RECORD_PROCESS_FUNC_WITH_PARA 5
+#define RECORD_OTHER 6
 
 #define FUNC_MAX 300
 #define PARAM_MAX 6

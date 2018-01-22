@@ -28,13 +28,8 @@
 #include <errno.h>
 #include <sys/time.h>
 
-////////////////////
-//typedef unsigned long long uint64_t;
-//#include"header/Stack.h"
 #include"include/comm_struct/List.h"
 #include<string.h>
-
-////////////////////
 
 #include "config-host.h"
 
@@ -148,20 +143,40 @@ int funccount=0;
 char target[16];
 my_target_ulong got;
 bool print_funcstack;
-int only_record_specific_func;
+int trace_type;
 
 Trace_func trace_func[FUNC_MAX];
 static void map_reg(void){
     int byte = sizeof(my_target_ulong);
     FILE * fp;
-    fp = fopen("reg_map.txt","r");
-    int map[9]={0};
-    int b,i=0,j;
+    int map[11]={0};
     char ch[10]={0};
-    int to;
+    int b,i,j,to;
+    char buf[100]={0};
+    char relate_path[]="/../configs/reg_map.txt";
 
+    //get qemu path, and get reg_map.txt path
+    if(readlink("/proc/self/exe",buf,sizeof(buf))==-1){
+        printf("Can not get qemu path !!!");
+        exit(0);
+    }
+    printf("%s\n",buf);
+    i = strlen(buf);
+    while(i>0){
+        if(buf[i]!='/')
+            i--;
+        else
+            break;
+    }   
+    buf[i]='\0';
+    strcat(buf,relate_path);
+    printf("%s\n",buf);
+
+    //open reg_map.txt
+    i=0;
+    fp = fopen(buf,"r");
     while(fscanf(fp,"%d %s %d --> %d",&b,ch,&to,map+i)!=EOF){
-        if(i++==9) break;
+        if(i++==11) break;
     }
     fclose(fp);
 
@@ -169,16 +184,17 @@ static void map_reg(void){
        for(j=0;j<trace_func[i].para_num;j++){
            if(byte==4){
                int pos = trace_func[i].para[j].pos;
-               if(pos>2){
-                    printf("reg_map.txt error,regs num can't great then 2 in x86_32\n");
+               if(pos>3){
+                    printf("reg_map.txt error,regs num can't great then 3 in x86_32\n");
                     exit(0);
                }
+
                trace_func[i].para[j].reg = map[trace_func[i].para[j].pos];
            }
            else if(byte==8){
                int pos = trace_func[i].para[j].pos;
-               if(pos>5){
-                    printf("reg_map.txt error,regs num can't great then 5 in x86_64\n");
+               if(pos>6){
+                    printf("reg_map.txt error,regs num can't great then 6 in x86_64\n");
                     exit(0);
                }
                trace_func[i].para[j].reg = map[trace_func[i].para[j].pos+3];
@@ -3129,24 +3145,35 @@ static int read_configs(void){
         print_funcstack = false;
     }
 
-    only_record_specific_func = RECORD_FUNC_NO;
+    trace_type = RECORD_FUNC_NO;
 
     // only record specified kernel function
     if(fgets(line,sizeof(line)/sizeof(char),fp)==NULL){
         printf("only record specified kernel function parameter error!");
         exit(0);
     }
-    if(strstr(line,"only_record_specific_func:1")!=NULL){
+    if(strstr(line,"trace_type:spec_func_with_param")!=NULL){
         //only record specific func call 
-        only_record_specific_func = RECORD_SPEC_FUNC;
+        trace_type = RECORD_SPEC_FUNC;
     }
-    else if(strstr(line,"only_record_specific_func:2")!=NULL){
+    else if(strstr(line,"trace_type:all_func_without_param")!=NULL){
         //record all func without parameter
-        only_record_specific_func = RECORD_ALL_FUNC_WITHOUT_PARA;
+        trace_type = RECORD_ALL_FUNC_WITHOUT_PARA;
     }
-    else if(strstr(line,"only_record_specific_func:3")!=NULL){
+    else if(strstr(line,"trace_type:all_func_with_param")!=NULL){
         //record all func with parameter
-        only_record_specific_func = RECORD_ALL_FUNC_WITH_PARA;
+        trace_type = RECORD_ALL_FUNC_WITH_PARA;
+    }
+    else if(strstr(line,"trace_type:process_func_without_param")!=NULL){
+        //record specified process func without parameter
+        trace_type = RECORD_PROCESS_FUNC_WITHOUT_PARA;
+    }
+    else if(strstr(line,"trace_type:process_func_with_param")!=NULL){
+        //record specified process func with parameter
+        trace_type = RECORD_PROCESS_FUNC_WITH_PARA;
+    }
+    else if(strstr(line,"trace_type:other")!=NULL){
+        trace_type = RECORD_OTHER;
     }
 
     //read specified address and paramenter info 
@@ -3155,13 +3182,17 @@ static int read_configs(void){
         line_len=strlen(line);
         line[line_len-1]=0;
         item=strtok(line,(char*)",");
-//        funcaddr[funccount] = hex2int(item);
         trace_func[funccount].funcaddr=hex2int(item);
 
         j=0;
         while(item){
             item = strtok(NULL,(char*)",");
             if(!item) break;
+            int int_item = hex2int(item);
+
+             //trace_func[*].para[0] is only for return value, when it is not configured, we make i++ to skip it 
+            if(int_item != 0 && j==0) j++;
+
             trace_func[funccount].para[j].pos = hex2int(item);
             item = strtok(NULL,(char*)",");
             memcpy(trace_func[funccount].para[j].type,item,strlen(item));
