@@ -713,11 +713,13 @@ static void print_return(FILE *fp,CPUState * cpu,my_target_ulong eax,logData ld,
     fprintf(fp,"\n");
 }
 
-//record return value without param
+//record return value without parameter
+/*
 static void print_return_without_param(FILE *fp,logData ld){
     fprintf(fp,"%c,%s,"TARGET_FMT_lx","TARGET_FMT_lx",%d,%d,"TARGET_FMT_lx"||",ld.type,ld.processName,ld.curAddr,ld.goAddr,(int)ld.pid,ld.tid,ld.esp);
     fprintf(fp,"\n");
 }
+*/
 
 static void print_all_regs_para(CPUArchState *env){
 #if osBit32
@@ -970,7 +972,7 @@ static logData get_logdata(CPUArchState *env,CPUState *cpu,TranslationBlock *tb)
     if(tb->type==TB_CALL){
         ld.type='C';
         ld.curAddr = tb->pc+tb->size-2;
-    }else{
+    }else if(tb->type == TB_RET){
         ld.type='R';
         ld.esp -= sizeof(my_target_ulong);
         ld.curAddr = tb->pc+tb->size-1;
@@ -1058,7 +1060,7 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
                 return ;
         }
     }
-    else{
+    else if(tb->type==TB_RET){
         switch(trace_type){
             case RECORD_SPEC_FUNC:
                 {
@@ -1075,7 +1077,7 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
             case RECORD_ALL_FUNC_WITHOUT_PARA:
             case RECORD_ALL_FUNC_WITH_PARA:
                 {
-                    print_return_without_param(stackWrite,ld);
+                    print_log_to_file(ld);
                     return ;
                 }
 
@@ -1084,7 +1086,7 @@ static void record_info(CPUArchState *env,CPUState *cpu,TranslationBlock *tb){
             case RECORD_PROCESS_FUNC_WITH_PARA:
                 {
                     if(is_record_process !=-1){
-                        print_return_without_param(stackWrite,ld);
+                        print_log_to_file(ld);
                         return ;
                     }
                 }

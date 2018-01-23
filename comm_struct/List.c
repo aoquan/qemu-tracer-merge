@@ -285,7 +285,6 @@ int IndexOfStr(const List *head,char * element){
     int count = 0;
     while(cur!=NULL)
     {
-        //if((*(my_target_ulong*)cur->data)==element){
         if(strcmp((char *)cur->data,element)==0){
             return count;
         }
